@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+    <title>CLUTCH &amp; BUCKSHOT | One-Hand PSX Combat Racer</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <main class="cabinet" id="app">
+      <header class="topbar" aria-label="Game controls">
+        <div class="brand">
+          <span class="brand-title">CLUTCH &amp; BUCKSHOT</span>
+          <span class="brand-sub">1-HAND MOUSE MULTITASK RACER</span>
+        </div>
+        <div class="topbar-actions">
+          <button type="button" id="btn-help" class="ctrl-btn" aria-expanded="false" aria-controls="panel-help">
+            CABIN MAP
+          </button>
+          <button type="button" id="btn-mute" class="ctrl-btn" aria-pressed="false">
+            AUDIO: ON
+          </button>
+          <button type="button" id="btn-pause" class="ctrl-btn" disabled>
+            PAUSE
+          </button>
+        </div>
+      </header>
+
+      <section class="viewport-shell" aria-label="Race cockpit viewport">
+        <div class="viewport" id="viewport">
+          <canvas id="gl-canvas" aria-hidden="true"></canvas>
+          <canvas id="cockpit-canvas" aria-label="Interactive car cockpit. Use mouse to operate pedals, wheel, nitro handle, and visor shotgun."></canvas>
+
+          <!-- Loading state -->
+          <div class="overlay" id="screen-loading" role="status" aria-live="polite">
+            <div class="panel">
+              <h1 class="panel-title">BUILDING CIRCUIT</h1>
+              <p class="panel-copy" id="loading-status">Generating PSX track geometry and cabin sprites...</p>
+            </div>
+          </div>
+
+          <!-- Error state -->
+          <div class="overlay hidden" id="screen-error" role="alert">
+            <div class="panel panel-danger">
+              <h1 class="panel-title">RENDERER ERROR</h1>
+              <p class="panel-copy" id="error-message">WebGL failed to initialize in this browser.</p>
+              <button type="button" id="btn-retry" class="cta-btn">RELOAD GAME</button>
+            </div>
+          </div>
+
+          <!-- Title / Briefing state -->
+          <div class="overlay hidden" id="screen-start" role="dialog" aria-modal="true" aria-labelledby="start-heading">
+            <div class="panel">
+              <h1 class="panel-title" id="start-heading">ONE HAND. FOUR JOBS.</h1>
+              <p class="panel-lead">
+                Survive 3 laps against 5 rival cars using only your mouse hand. Every action leaves the other stations unattended.
+              </p>
+              <dl class="station-list">
+                <div class="station-row">
+                  <dt>FOOTWELL PEDALS (BOTTOM LEFT)</dt>
+                  <dd>Hold GAS to build speed. Let go and coast while your hand moves elsewhere. Hold BRK for sharp turns.</dd>
+                </div>
+                <div class="station-row">
+                  <dt>STEERING WHEEL (LEFT)</dt>
+                  <dd>Grab and rotate to corner. When released, the wheel slowly self-centers while road bumps tug your line.</dd>
+                </div>
+                <div class="station-row">
+                  <dt>NITRO T-HANDLE (RIGHT)</dt>
+                  <dd>Drag all the way down to trigger boost. Pull repeatedly to stack up to 3X speed with heavy cabin shake.</dd>
+                </div>
+                <div class="station-row">
+                  <dt>VISOR SHOTGUN (TOP RIGHT)</dt>
+                  <dd>Click holster to equip, Left-Click road to fire. When empty, click holster to dock open, drag 2 spent hulls out, drag 2 fresh shells from strap into breech, and click gun to snap shut.</dd>
+                </div>
+              </dl>
+              <div class="panel-actions">
+                <button type="button" id="btn-start" class="cta-btn">IGNITION: START 3-LAP RACE</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Cabin Map / Help Drawer -->
+          <div class="overlay hidden" id="panel-help" role="dialog" aria-modal="true" aria-labelledby="help-heading">
+            <div class="panel">
+              <h2 class="panel-title" id="help-heading">CABIN OPERATING MANUAL</h2>
+              <ul class="manual-list">
+                <li><strong>Drive vs. Shoot:</strong> While holding the sawed-off shotgun, your hand cannot touch the wheel, pedals, or nitro.</li>
+                <li><strong>Reloading Under Fire:</strong> Once docked open on the sun visor, your hand is free between shell drags to correct steering or tap gas.</li>
+                <li><strong>Shotgun Range:</strong> Point-blank blasts wreck rivals in 1 shot. Mid-range blasts smoke them first, then wreck on the 2nd hit.</li>
+                <li><strong>Nitro Risk:</strong> Nitro pressure regenerates automatically. 3X stack delivers maximum top speed and violent road drift.</li>
+                <li><strong>Shortcuts:</strong> Press <kbd>Esc</kbd> to pause or close dialogs, <kbd>M</kbd> to toggle sound.</li>
+              </ul>
+              <div class="panel-actions">
+                <button type="button" id="btn-close-help" class="cta-btn">CLOSE MANUAL</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Pause state -->
+          <div class="overlay hidden" id="screen-pause" role="dialog" aria-modal="true" aria-labelledby="pause-heading">
+            <div class="panel">
+              <h2 class="panel-title" id="pause-heading">RACE PAUSED</h2>
+              <p class="panel-copy" id="pause-stats">Lap 1 of 3</p>
+              <div class="panel-actions">
+                <button type="button" id="btn-resume" class="cta-btn">RESUME RACE</button>
+                <button type="button" id="btn-restart-pause" class="ctrl-btn">RESTART CIRCUIT</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Finish / Results state -->
+          <div class="overlay hidden" id="screen-finish" role="dialog" aria-modal="true" aria-labelledby="finish-heading">
+            <div class="panel">
+              <h2 class="panel-title" id="finish-heading">CHECKERED FLAG</h2>
+              <p class="result-rank" id="finish-rank">1ST PLACE</p>
+              <dl class="result-metrics">
+                <div>
+                  <dt>TOTAL TIME</dt>
+                  <dd id="finish-time">00:00.00</dd>
+                </div>
+                <div>
+                  <dt>BEST LAP</dt>
+                  <dd id="finish-best">00:00.00</dd>
+                </div>
+                <div>
+                  <dt>RIVALS WRECKED</dt>
+                  <dd id="finish-wrecks">0</dd>
+                </div>
+              </dl>
+              <div class="panel-actions">
+                <button type="button" id="btn-race-again" class="cta-btn">RACE AGAIN</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
