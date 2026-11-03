@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>2D Cabin Preview | Clutch &amp; Buckshot</title>
+    <link rel="stylesheet" href="./cabin.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>2D cabin preview</h1>
+        <p>2D cabin over a live 3D Badlands circuit. Autodrive and look controls work; in-cabin gameplay controls are not connected yet.</p>
+      </header>
+      <canvas id="cabin" width="480" height="270" aria-label="Pixel-art cabin perspective preview, initially facing forward"></canvas>
+      <div class="exterior-controls">
+        <button type="button" id="btn-drive" aria-pressed="false" disabled>Pause drive</button>
+        <p id="exterior-status" role="status">Starting live 3D exterior…</p>
+      </div>
+      <div class="views" role="group" aria-label="View direction">
+        <button type="button" data-yaw="-1">Left window</button>
+        <button type="button" data-yaw="-0.5">Half left</button>
+        <button type="button" data-yaw="0" aria-pressed="true">Forward</button>
+        <button type="button" data-yaw="0.5">Half right</button>
+        <button type="button" data-yaw="1">Right window</button>
+      </div>
+      <div class="look">
+        <label for="look">Head turn</label>
+        <input id="look" type="range" min="-1" max="1" step="0.01" value="0" />
+        <output id="direction" for="look">Forward</output>
+      </div>
+      <div class="loadout">
+        <label for="vehicle">Vehicle <select id="vehicle"></select></label>
+        <label for="weapon">Visor weapon <select id="weapon"></select></label>
+        <label for="boost">Boost demo <select id="boost"><option value="0">Ready</option></select></label>
+      </div>
+      <p class="help">Hold A/D to peek. Q/E locks a side view. W/S or Escape faces forward to reach the driving controls. The road and surrounding cars are live 3D; mirrors still show sample scenery. Preview loadouts do not change your save.</p>
+      <p id="preview-error" role="alert" hidden></p>
+    </main>
+    <script type="module" src="./cabin.js"></script>
+  </body>
+</html>

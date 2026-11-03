@@ -1,0 +1,38 @@
+:root {
+  color-scheme: dark;
+  font-family: system-ui, sans-serif;
+  color: #f4efe6;
+  background: #11141a;
+  accent-color: #ffb020;
+}
+* { box-sizing: border-box; }
+body { margin: 0; padding: 20px 12px 32px; }
+main { max-width: 960px; margin: auto; }
+h1 { margin: 0 0 8px; font-size: clamp(1.3rem, 4vw, 1.8rem); }
+p { line-height: 1.5; margin: 0 0 16px; max-width: 75ch; }
+canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; background: #161920; }
+.views { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+.exterior-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-top: 12px; }
+.exterior-controls button { flex: 0 1 150px; }
+.exterior-controls p { flex: 1 1 220px; margin: 0; font-size: 0.9rem; }
+button:disabled { cursor: default; opacity: 0.65; }
+#exterior-status[data-mode="error"] { color: #ffb9ad; }
+button, select { font: inherit; min-height: 44px; border: 1px solid #738099; border-radius: 2px; padding: 8px 12px; color: inherit; background: #232936; }
+button { cursor: pointer; flex: 1 1 140px; }
+button:hover { background: #30394a; }
+button[aria-pressed="true"] { background: #ffb020; color: #11141a; border-color: #ffb020; }
+:focus-visible { outline: 3px solid #ffb020; outline-offset: 3px; }
+.look { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; margin-bottom: 16px; }
+input { width: 100%; min-width: 0; min-height: 44px; }
+output { min-width: 90px; text-align: right; font-variant-numeric: tabular-nums; }
+.loadout { display: flex; flex-wrap: wrap; gap: 12px 24px; margin-bottom: 16px; }
+.loadout label { display: flex; flex: 1 1 280px; flex-direction: column; gap: 6px; min-width: 0; }
+select { width: 100%; }
+.help { color: #cbc1ab; font-size: 0.9rem; }
+#preview-error { color: #ffb9ad; }
+::selection { background: #ffb020; color: #11141a; }
+@media (max-width: 480px) {
+  .look { grid-template-columns: auto 1fr; gap: 4px 12px; }
+  .look input { grid-column: 1 / -1; grid-row: 2; }
+  output { min-width: 0; }
+}

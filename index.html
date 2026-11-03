@@ -12,7 +12,7 @@
         <canvas id="gl-canvas" aria-hidden="true"></canvas>
         <canvas
           id="cockpit-canvas"
-          aria-label="Interactive 3D car cockpit. Use mouse for wheel, H-shifter, nitro, overhead trunk switch, and visor weapons. Hold A or D to peek side windows, or tap Q or E to lock side view."
+          aria-label="Interactive 2D perspective cockpit. Use mouse for wheel, H-shifter, nitro, dashboard trunk switch, and visor weapons. Hold A or D to peek side windows, or tap Q or E to lock side view. Recenter with W or S to reach driving controls."
         ></canvas>
 
         <!-- Compact corner settings button -->
@@ -99,7 +99,7 @@
                 <div class="stack-list" id="track-list"></div>
                 <div class="controls-card">
                   <ul class="compact-list">
-                    <li><strong>One Hand:</strong> Steer wheel, shift H-gate, pull colored Nitro, click overhead Trunk trap, and reload visor guns.</li>
+                <li><strong>One Hand:</strong> Steer wheel, shift H-gate, pull Nitro, use the dashboard Trunk trap, and reload visor guns.</li>
                     <li><strong>Side Windows:</strong> Hold <kbd>A</kbd>/<kbd>D</kbd> to peek, or tap <kbd>Q</kbd>/<kbd>E</kbd> to lock view (<kbd>W</kbd> forward).</li>
                   </ul>
                 </div>
@@ -190,9 +190,6 @@
             <p class="panel-copy" id="pause-race-status"></p>
 
             <div class="settings-grid">
-              <button type="button" id="btn-toggle-cabin" class="ctrl-btn" aria-pressed="false">
-                CABIN: CLASSIC 2.5D PIXEL
-              </button>
               <button type="button" id="btn-toggle-audio" class="ctrl-btn" aria-pressed="false">
                 AUDIO: ON
               </button>
@@ -204,7 +201,7 @@
             <dl class="key-legend">
               <div>
                 <dt>MOUSE (1 HAND)</dt>
-                <dd>Steer wheel, shift 3-8 speed H-gate, pull colored Nitro, flip overhead Trunk switch, draw/fire/reload visor guns.</dd>
+                <dd>Steer wheel, shift 3-8 speed H-gate, pull Nitro and watch its boost gauge, use the dashboard Trunk switch, draw/fire/reload visor guns.</dd>
               </div>
               <div>
                 <dt>SIDE WINDOWS (A/D PEEK | Q/E LOCK)</dt>

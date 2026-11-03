@@ -46,8 +46,9 @@ import {
   stepCarPhysics,
 } from '../src/logic.js';
 import { buildVehicle3D, updateVehiclePanels } from '../src/carMesh.js';
-import { getHGateLayout } from '../src/cockpit.js';
-import { createCabin3DRig } from '../src/cockpit3d.js';
+import { createCockpitController, getHGateLayout } from '../src/cockpit.js';
+import { createCabin2D } from '../src/cabin2d.js';
+import { cabinLayout } from '../src/cabinPerspective.js';
 
 // 1. v3 Starter Economy & Loadout: $0 Cash, 3-Speed Rustbucket, M1911, Uninstalled Nitro & Empty Trunk
 {
@@ -125,7 +126,7 @@ import { createCabin3DRig } from '../src/cockpit3d.js';
   assert.ok(car.speed < -5, 'Reverse slot (-1) backs the vehicle up');
 }
 
-// 3. Pure Color Nitro Progression: Green (T1) -> Blue (T2) -> Red (T3) -> Purple (Rally + T3)
+// 3. Nitro gauge progression: Blue -> Cyan -> Pink -> Purple Overdrive (Apex + T3)
 {
   const save = createDefaultSave();
   save.cash = 10000;
@@ -138,7 +139,7 @@ import { createCabin3DRig } from '../src/cockpit3d.js';
   t1Nitro.dragging = true;
   const pull1 = updateNitroDrag(t1Nitro, 0.86);
   assert.equal(pull1.triggered, true);
-  assert.equal(pull1.stageName, 'GREEN');
+  assert.equal(pull1.stageName, 'BLUE');
   assert.equal(pull1.stageColor, NITRO_STAGE_COLORS[0]);
 
   purchaseCarUpgrade(save, 'coupe', 'nitro', 3);
@@ -150,9 +151,9 @@ import { createCabin3DRig } from '../src/cockpit3d.js';
     t3Nitro.latchedThisDrag = false;
     updateNitroDrag(t3Nitro, 0.86);
   }
-  assert.equal(getNitroStageInfo(t3Nitro.stacks).name, 'RED');
+  assert.equal(getNitroStageInfo(t3Nitro.stacks).name, 'PINK');
 
-  // Apex Turbo Hatch with Tier 3 N2O unlocks 4th PURPLE stage
+  // Apex Turbo Hatch with Tier 3 N2O unlocks overdrive.
   purchaseCar(save, 'rally');
   purchaseCarUpgrade(save, 'rally', 'nitro', 3);
   const rallyNitro = createNitroState(getComputedCarStats(save, 'rally'));
@@ -164,8 +165,10 @@ import { createCabin3DRig } from '../src/cockpit3d.js';
     updateNitroDrag(rallyNitro, 0.88);
   }
   assert.equal(rallyNitro.stacks, 4);
-  assert.equal(getNitroStageInfo(rallyNitro.stacks).name, 'PURPLE');
-  assert.equal(getNitroStageInfo(rallyNitro.stacks).color, '#b84dff');
+  assert.equal(getNitroStageInfo(rallyNitro.stacks).name, 'OVERDRIVE');
+  assert.equal(getNitroStageInfo(rallyNitro.stacks).color, '#a55cff');
+  assert.deepEqual([1, 2, 3, 4].map(stacks => getNitroStageInfo(stacks).color),
+    ['#3898ff', '#32e6d2', '#ff5599', '#a55cff']);
   stepNitro(rallyNitro, 0.25);
   assert.equal(rallyNitro.stacks, 4);
 }
@@ -399,124 +402,94 @@ import { createCabin3DRig } from '../src/cockpit3d.js';
   }
 }
 
-// 8. 3D Perspective Cabin Ray-Plane Projection & 360-Degree World Camera Uprightness
+// 8. Projected 2D Cabin Input & 360-Degree World Camera Uprightness
 {
   const prevDoc = globalThis.document;
   globalThis.document = {
     createElement: () => ({
-      width: 0,
-      height: 0,
-      getContext: () => ({ imageSmoothingEnabled: false, getImageData: () => ({ data: [0, 0, 0, 0] }) }),
+      width: 0, height: 0,
+      getContext: () => new Proxy({
+        createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }),
+        getImageData: (x, y, w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }),
+      }, { get: (target, key) => key in target ? target[key] : () => {} }),
     }),
   };
   try {
-    const dummyRearTex = new THREE.Texture();
-    const rig = createCabin3DRig(dummyRearTex);
-
-    // Looking straight ahead hits windshield center (240, 135)
-    rig.updateCamera(0, 0, 0, 0, 0, 0);
-    const fwdHit = rig.projectToLayer('windshield', 0, 0);
-    assert.equal(fwdHit.inBounds, true);
-    assert.ok(Math.abs(fwdHit.x - 240) < 2 && Math.abs(fwdHit.y - 135) < 2);
-
-    // Looking left (-1) rotates head toward angled leftDoor plane
-    rig.updateCamera(-1, 0, 0, 0, 0, 0);
-    assert.equal(rig.projectToLayer('leftDoor', 0, 0).inBounds, true);
-    assert.equal(rig.projectToLayer('windshield', 0, 0), null);
-
-    // Looking right (+1) rotates head toward angled rightDoor plane, and rearWall seals cabin back
-    rig.updateCamera(1, 0, 0, 0, 0, 0);
-    assert.equal(rig.projectToLayer('rightDoor', 0, 0).inBounds, true);
-    assert.equal(rig.projectToLayer('windshield', 0, 0), null);
-    assert.ok(rig.layers.rearWall, 'Rear bulkhead layer seals back of 3D cabin');
-    for (const mode of ['classic_25d', 'coupe_3d', 'classic_25d']) {
-      rig.setMode(mode);
-      const coupe = mode === 'coupe_3d';
-      assert.equal(rig.camera.position.x, coupe ? -0.34 : 0);
-      assert.equal(rig.layers.windshield.mesh.rotation.x > 0.5, coupe);
-      assert.equal(rig.layers.dash.mesh.geometry.attributes.position.getZ(2) > 0.1, coupe);
-      const glassTop = rig.layers.windshield.mesh.localToWorld(new THREE.Vector3(0, 0.5, 0));
-      const glassBottom = rig.layers.windshield.mesh.localToWorld(new THREE.Vector3(0, -0.5, 0));
-      assert.equal(glassTop.z > glassBottom.z, coupe, 'Coupe windshield slopes toward the driver at the roof');
-      for (const name of ['leftDoor', 'rightDoor']) {
-        const door = rig.layers[name].mesh;
-        const top = door.localToWorld(new THREE.Vector3(0, 0.5, 0));
-        const bottom = door.localToWorld(new THREE.Vector3(0, -0.5, 0));
-        assert.equal(Math.abs(top.x) < Math.abs(bottom.x) - 0.01, coupe,
-          'Coupe window tops tilt inward');
-      }
-      rig.updateCamera(0, 0, 0, 0, 3, 4);
-      assert.ok(Math.abs(rig.camera.position.x - (coupe ? -0.34 : 0) - 0.0066) < 1e-8,
-        'Shake preserves the driver seat offset');
-
-      for (const layer of Object.values(rig.layers)) {
-        assert.ok(Math.abs(layer.geoW / layer.geoH - layer.width / layer.height) < 1e-8,
-          `${mode} ${layer.width}x${layer.height} uses square texels`);
-      }
-      for (const yaw of [-1, -0.5, 0, 0.5, 1]) {
-        rig.updateCamera(yaw, 0, 0, 0, 0, 0);
-        for (const [name, x, y] of [
-          ['windshield', 97, 29], ['windshield', 320, 45],
-          ['wheelPull', 114, 84], ['wheelPull', 350, 58],
-          ['dash', 245, 32], ['dash', 224, 70], ['dash', 284, 113],
-        ]) {
-          const layer = rig.layers[name];
-          let local = new THREE.Vector3((x / layer.width - 0.5) * layer.geoW,
-            (0.5 - y / layer.height) * layer.geoH, 0);
-          if (name === 'dash' && coupe) {
-            const span = Math.min(Math.max(x - 184, 0), 126) * layer.geoW / layer.width;
-            local.x += span * (Math.cos(THREE.MathUtils.degToRad(14)) - 1);
-            local.z = span * Math.sin(THREE.MathUtils.degToRad(14));
-          }
-          const world = layer.mesh.localToWorld(local);
-          const cameraLocal = world.clone().applyMatrix4(rig.camera.matrixWorldInverse);
-          const ndc = world.project(rig.camera);
-          if (cameraLocal.z >= -0.08) continue;
-          const hit = rig.projectToLayer(name, ndc.x, ndc.y, true);
-          assert.ok(hit, `${mode} ${name} projects at yaw ${yaw}`);
-          assert.ok(Math.abs(hit.x - x) < 0.001 && Math.abs(hit.y - y) < 0.001,
-            `${mode} ${name} preserves control coordinates at yaw ${yaw}`);
-          if (yaw === 0) {
-            assert.ok(Math.abs(ndc.x) < 1 && Math.abs(ndc.y) < 1,
-              `${mode} ${name} control is on screen`);
+    const rig = createCabin2D();
+    rig.draw(globalThis.document.createElement('canvas').getContext('2d'),
+      { spec: { gimmickType: 'drift_purple', dashColor: '#1d2228' } });
+    const controls = [
+      ['windshield', 97, 29, 433, 174],
+      ['windshield', 320, 45, 342, 45],
+      ['windshield', 435, 30, 457, 30],
+      ['wheelPull', 114, 84, 114, 218],
+      ['wheelPull', 350, 38, 350, 172],
+      ['dash', 224, 66, 224, 202],
+      ['dash', 245, 32, 245, 168],
+      ['dash', 194, 60, 194, 196],
+    ];
+    for (const yaw of [-1, -0.5, 0, 0.5, 1]) {
+      for (const [panX, panY, roll, shakeX, shakeY] of [[0, 0, 0, 0, 0], [0.6, -0.4, 0.02, 2, -3]]) {
+        rig.updateCamera(yaw, panX, panY, roll, shakeX, shakeY);
+        for (const [layer, sourceX, sourceY, x, y] of controls) {
+          const point = cabinLayout(yaw + panX * 0.03).projectFront(x, y);
+          const dx = point[0] - 240, dy = point[1] - 135;
+          const sx = dx * Math.cos(-roll) - dy * Math.sin(-roll) + 240 + shakeX - panX * 3;
+          const sy = dx * Math.sin(-roll) + dy * Math.cos(-roll) + 135 + shakeY - panY * 2;
+          const ndcX = sx / 240 - 1, ndcY = 1 - sy / 135;
+          const hit = rig.projectToLayer(layer, ndcX, ndcY);
+          if (Math.abs(ndcX) > 1 || Math.abs(ndcY) > 1) {
+            assert.equal(hit, null, 'Offscreen controls cannot be picked');
+          } else {
+            assert.ok(hit, layer + ' control is reachable in the visible view');
+            assert.ok(Math.abs(hit.x - sourceX) < 1e-6 && Math.abs(hit.y - sourceY) < 1e-6,
+              'Drawing and input share the same relocation, perspective, pan, roll and shake');
           }
         }
       }
+    }
+    rig.updateCamera(0);
+    assert.ok(rig.projectToLayer('wheelPull', 114 / 240 - 1, 1 - 218 / 135));
+    assert.equal(rig.projectToLayer('wheelPull', 3, -3), null);
+    assert.equal(rig.projectToLayer('wheelPull', 3, -3, true).inBounds, false,
+      'Captured drags continue beyond the panel edge');
+    rig.layers.wheelPull.ctx.getImageData = () => ({ data: [0, 0, 0, 255] });
+    assert.equal(rig.projectToLayer('dash', 245 / 240 - 1, 1 - 168 / 135), null,
+      'Opaque foreground prevents picking a hidden dashboard control');
 
-      rig.updateCamera(0, 0, 0, 0, 0, 0);
-      const wheel = rig.layers.wheelPull;
-      const wheelEdges = [[66, 84], [162, 84], [114, 36], [114, 132]].map(([x, y]) =>
-        wheel.mesh.localToWorld(new THREE.Vector3((x / 480 - 0.5) * wheel.geoW,
-          (0.5 - y / 140) * wheel.geoH, 0)).project(rig.camera));
-      const wheelWidth = (wheelEdges[1].x - wheelEdges[0].x) * 240;
-      const wheelHeight = (wheelEdges[2].y - wheelEdges[3].y) * 135;
-      assert.ok(Math.abs(wheelWidth - wheelHeight) < 1e-6, 'Forward wheel projects as a circle');
-      assert.ok(wheelEdges.every(p => Math.abs(p.x) < 1 && Math.abs(p.y) < 1),
-        'The full wheel rim stays on screen');
-      const wheelCenter = wheel.mesh.localToWorld(new THREE.Vector3(
-        (114 / 480 - 0.5) * wheel.geoW, (0.5 - 84 / 140) * wheel.geoH, 0)).project(rig.camera);
-      assert.ok(rig.projectToLayer('wheelPull', wheelCenter.x, wheelCenter.y));
-      assert.equal(rig.projectToLayer('wheelPull', 3, -3), null);
-      assert.equal(rig.projectToLayer('wheelPull', 3, -3, true).inBounds, false,
-        'Captured wheel drag continues beyond panel bounds');
-
-      const dash = rig.layers.dash;
-      const dashPoint = dash.mesh.localToWorld(new THREE.Vector3(0, 0, coupe ?
-        56 * dash.geoW / 480 * Math.sin(THREE.MathUtils.degToRad(14)) : 0)).project(rig.camera);
-      wheel.ctx.getImageData = () => ({ data: [0, 0, 0, 255] });
-      assert.equal(rig.projectToLayer('dash', dashPoint.x, dashPoint.y), null,
-        'Opaque foreground blocks clicks on the dashboard');
-      wheel.ctx.getImageData = () => ({ data: [0, 0, 0, 0] });
-
-      for (const [layer, rect] of [[rig.layers.windshield, [150, 17, 100, 24]],
-        [rig.layers.leftDoor, [307, 139, 48, 28]]]) {
-        const mirror = layer.mesh.children[0];
-        assert.ok(mirror, 'Mirror follows its panel transform');
-        assert.ok(Math.abs((mirror.position.x / layer.geoW + 0.5) * layer.width
-          - rect[0] - rect[2] / 2) < 1e-6);
-        assert.ok(Math.abs((0.5 - mirror.position.y / layer.geoH) * layer.height
-          - rect[1] - rect[3] / 2) < 1e-6);
+    const previousWindow = globalThis.window;
+    const windowHandlers = {}, canvasHandlers = {};
+    globalThis.window = { addEventListener: (name, fn) => { windowHandlers[name] = fn; } };
+    try {
+      const overlay = globalThis.document.createElement('canvas');
+      overlay.addEventListener = (name, fn) => { canvasHandlers[name] = fn; };
+      overlay.getBoundingClientRect = () => ({ left: 0, top: 0, width: 480, height: 270 });
+      const save = createDefaultSave();
+      save.selectedCar = 'hyper';
+      save.carParts.hyper.trans = 3;
+      const carStats = getComputedCarStats(save);
+      const car = createCarState(carStats), nitro = createNitroState(carStats), loadout = createLoadoutState(save);
+      const controller = createCockpitController(overlay, createCabin2D(),
+        new Proxy({}, { get: () => () => {} }), {
+          isInteractive: () => true, getState: () => ({ car, nitro, loadout, carStats }),
+        });
+      const gate = getHGateLayout(8);
+      const first = gate.pockets[0];
+      const knobX = first.x - 3 + (first.x - 254) * 0.16;
+      const knobY = first.y - 12;
+      const event = (clientX, clientY) => ({ clientX, clientY, button: 0 });
+      for (const pocket of gate.pockets) {
+        car.gear = 1;
+        controller.resetCabinEffects(1, 8);
+        controller.render({ car, nitro, loadout, carStats, rank: 1, aliveRivals: 3,
+          totalRacers: 4, totalLaps: 3, lockedView: 0, smoothRoll: 0, shakeX: 0, shakeY: 0 });
+        canvasHandlers.pointerdown(event(knobX, knobY + 136));
+        windowHandlers.pointermove(event(pocket.x - first.x + knobX, pocket.y - first.y + knobY + 136));
+        windowHandlers.pointerup();
+        assert.equal(car.gear, pocket.gear, 'Overlapping eight-speed pockets snap to the nearest gear');
       }
+    } finally {
+      globalThis.window = previousWindow;
     }
   } finally {
     globalThis.document = prevDoc;
@@ -551,7 +524,7 @@ import { createCabin3DRig } from '../src/cockpit3d.js';
   for (const value of [undefined, null, 'invalid', 1, 'classic_25d', 'coupe_3d']) {
     stored = JSON.stringify({ cash: 1234, cabinMode: value });
     const save = loadSave(storage);
-    assert.equal(save.cabinMode, value === 'coupe_3d' ? value : 'classic_25d');
+    assert.equal('cabinMode' in save, false, 'Obsolete cabin modes are removed');
     assert.equal(save.cash, 1234, 'Cabin migration preserves progress');
     persistSave(save, storage);
     assert.equal(loadSave(storage).cabinMode, save.cabinMode);

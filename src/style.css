@@ -802,11 +802,6 @@ button:focus-visible {
   margin-bottom: 12px;
 }
 
-#btn-toggle-cabin {
-  min-height: 44px;
-  max-width: 100%;
-}
-
 .key-legend {
   margin: 0 0 14px;
   display: flex;

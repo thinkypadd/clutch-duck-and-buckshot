@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 480" width="100%" height="100%">
+  <defs>
+    <linearGradient id="baySky" x1="0" y1="0" x2="0" y2="100%">
+      <stop offset="0%" stop-color="#0e1118"/>
+      <stop offset="70%" stop-color="#181d28"/>
+      <stop offset="100%" stop-color="#252b3a"/>
+    </linearGradient>
+    <pattern id="bayGrid" width="4" height="4" patternUnits="userSpaceOnUse">
+      <rect width="2" height="2" fill="#000" opacity="0.15"/>
+      <rect x="2" y="2" width="2" height="2" fill="#000" opacity="0.15"/>
+    </pattern>
+  </defs>
+
+  <!-- Garage backdrop -->
+  <rect width="960" height="480" fill="url(#baySky)"/>
+
+  <!-- Concrete floor with floor markers -->
+  <polygon points="0,320 960,320 960,480 0,480" fill="#1b1e24"/>
+  <line x1="0" y1="320" x2="960" y2="320" stroke="#333b4d" stroke-width="2"/>
+  <line x1="120" y1="480" x2="380" y2="320" stroke="#252a36" stroke-width="3"/>
+  <line x1="840" y1="480" x2="580" y2="320" stroke="#252a36" stroke-width="3"/>
+
+  <!-- Hydraulic lift posts & yellow arms -->
+  <rect x="220" y="80" width="30" height="320" fill="#2d3342" stroke="#12141a" stroke-width="2"/>
+  <rect x="710" y="80" width="30" height="320" fill="#2d3342" stroke="#12141a" stroke-width="2"/>
+  <rect x="235" y="270" width="490" height="18" fill="#d49b28" stroke="#111317" stroke-width="2"/>
+
+  <!-- Car body on lift (86 Kuruma Coupe with open hood & open door) -->
+  <!-- Main lower chassis -->
+  <polygon points="320,270 640,270 660,225 300,225" fill="#a82420" stroke="#161820" stroke-width="2"/>
+  <!-- Wheels -->
+  <circle cx="360" cy="270" r="26" fill="#15171d" stroke="#687285" stroke-width="6"/>
+  <circle cx="600" cy="270" r="26" fill="#15171d" stroke="#687285" stroke-width="6"/>
+
+  <!-- Hinged 3D Hood swung open with prop rod -->
+  <polygon points="300,225 380,225 340,135 270,145" fill="#8c1c18" stroke="#161820" stroke-width="2"/>
+  <!-- Chrome prop rod holding hood -->
+  <line x1="330" y1="225" x2="335" y2="148" stroke="#dbe4f5" stroke-width="3"/>
+  <circle cx="335" cy="148" r="3" fill="#ffb020"/>
+
+  <!-- Exposed Engine Bay (Twin-cam block, chrome intake, oil cooler) -->
+  <rect x="315" y="195" width="60" height="30" fill="#2c3340" stroke="#14171e" stroke-width="1.5"/>
+  <rect x="325" y="180" width="40" height="18" fill="#c43228" stroke="#14171e" stroke-width="1.5"/>
+  <text x="345" y="192" font-family="'Courier New', monospace" font-size="7" fill="#ffeb75" font-weight="bold" text-anchor="middle">TWIN-CAM</text>
+  <!-- Oil cooler & braided lines -->
+  <rect x="295" y="215" width="22" height="12" fill="#3898ff" stroke="#0e1015" stroke-width="1"/>
+  <path d="M 317 220 Q 325 210 332 205" fill="none" stroke="#dbe4f5" stroke-width="2"/>
+
+  <!-- Driver Door swung outward -->
+  <polygon points="410,225 435,225 460,165 430,165" fill="#7a1814" stroke="#161820" stroke-width="2"/>
+  <rect x="435" y="175" width="18" height="18" fill="#1c2434" opacity="0.75"/>
+
+  <!-- Hinged Trunk Lid open on the rear -->
+  <polygon points="630,225 660,225 685,155 655,155" fill="#8c1c18" stroke="#161820" stroke-width="2"/>
+  <!-- Trunk bay: 55-gal Oil drum / Caltrop rack -->
+  <rect x="632" y="200" width="26" height="24" fill="#2d3340" stroke="#3898ff" stroke-width="1.5"/>
+  <text x="645" y="215" font-family="'Courier New', monospace" font-size="7" fill="#ffb020" font-weight="bold" text-anchor="middle">MINE</text>
+
+  <!-- UI Top Dock: 9 Subsystem slot pills -->
+  <rect x="110" y="24" width="740" height="42" fill="#141822" stroke="#485163" stroke-width="2" rx="2"/>
+  <!-- Active BLOCK slot -->
+  <rect x="122" y="31" width="72" height="28" fill="#ffb020" rx="2"/>
+  <text x="158" y="49" font-family="'Courier New', monospace" font-size="11" fill="#111317" font-weight="bold" text-anchor="middle">BLOCK</text>
+  <!-- INTAKE -->
+  <rect x="200" y="31" width="72" height="28" fill="#232938" stroke="#485163" stroke-width="1.5" rx="2"/>
+  <text x="236" y="49" font-family="'Courier New', monospace" font-size="11" fill="#cbc1ab" font-weight="bold" text-anchor="middle">INTAKE</text>
+  <!-- COOLING -->
+  <rect x="278" y="31" width="76" height="28" fill="#232938" stroke="#485163" stroke-width="1.5" rx="2"/>
+  <text x="316" y="49" font-family="'Courier New', monospace" font-size="11" fill="#cbc1ab" font-weight="bold" text-anchor="middle">COOLING</text>
+  <!-- TRANS -->
+  <rect x="360" y="31" width="72" height="28" fill="#232938" stroke="#485163" stroke-width="1.5" rx="2"/>
+  <text x="396" y="49" font-family="'Courier New', monospace" font-size="11" fill="#cbc1ab" font-weight="bold" text-anchor="middle">TRANS</text>
+  <!-- NITRO -->
+  <rect x="438" y="31" width="72" height="28" fill="#232938" stroke="#485163" stroke-width="1.5" rx="2"/>
+  <text x="474" y="49" font-family="'Courier New', monospace" font-size="11" fill="#cbc1ab" font-weight="bold" text-anchor="middle">NITRO</text>
+  <!-- TRUNK -->
+  <rect x="516" y="31" width="72" height="28" fill="#232938" stroke="#485163" stroke-width="1.5" rx="2"/>
+  <text x="552" y="49" font-family="'Courier New', monospace" font-size="11" fill="#cbc1ab" font-weight="bold" text-anchor="middle">TRUNK</text>
+  <!-- ARMOR -->
+  <rect x="594" y="31" width="72" height="28" fill="#232938" stroke="#485163" stroke-width="1.5" rx="2"/>
+  <text x="630" y="49" font-family="'Courier New', monospace" font-size="11" fill="#cbc1ab" font-weight="bold" text-anchor="middle">ARMOR</text>
+  <!-- BUMPER -->
+  <rect x="672" y="31" width="76" height="28" fill="#232938" stroke="#485163" stroke-width="1.5" rx="2"/>
+  <text x="710" y="49" font-family="'Courier New', monospace" font-size="11" fill="#cbc1ab" font-weight="bold" text-anchor="middle">BUMPER</text>
+  <!-- TIRES -->
+  <rect x="754" y="31" width="72" height="28" fill="#232938" stroke="#485163" stroke-width="1.5" rx="2"/>
+  <text x="790" y="49" font-family="'Courier New', monospace" font-size="11" fill="#cbc1ab" font-weight="bold" text-anchor="middle">TIRES</text>
+
+  <!-- Inspection Panel Toggles on right -->
+  <rect x="750" y="85" width="160" height="90" fill="#141822" stroke="#485163" stroke-width="2" rx="2"/>
+  <text x="830" y="105" font-family="'Courier New', monospace" font-size="10" fill="#ffb020" font-weight="bold" text-anchor="middle">HINGED 3D PANELS</text>
+  <rect x="765" y="115" width="60" height="22" fill="#243d26" stroke="#6be36b" stroke-width="1.5"/>
+  <text x="795" y="130" font-family="'Courier New', monospace" font-size="9" fill="#6be36b" font-weight="bold" text-anchor="middle">HOOD [OPEN]</text>
+  <rect x="835" y="115" width="60" height="22" fill="#243d26" stroke="#6be36b" stroke-width="1.5"/>
+  <text x="865" y="130" font-family="'Courier New', monospace" font-size="9" fill="#6be36b" font-weight="bold" text-anchor="middle">TRUNK [OPEN]</text>
+  <rect x="800" y="145" width="60" height="22" fill="#243d26" stroke="#6be36b" stroke-width="1.5"/>
+  <text x="830" y="160" font-family="'Courier New', monospace" font-size="9" fill="#6be36b" font-weight="bold" text-anchor="middle">DOOR [OPEN]</text>
+
+  <!-- Bottom Tier & Delta info dock -->
+  <rect x="110" y="410" width="740" height="56" fill="#11141c" stroke="#485163" stroke-width="2" rx="2"/>
+  <text x="130" y="432" font-family="'Courier New', monospace" font-size="13" fill="#f4efe6" font-weight="bold">PREVIEWING: V8 RACE BLOCK [TIER 2]</text>
+  <text x="130" y="452" font-family="'Courier New', monospace" font-size="11" fill="#6be36b">TOP SPEED: 142 -> 168 MPH | +18 HP | NO SPINS, 360° MANUAL ORBIT</text>
+  <rect x="680" y="420" width="150" height="36" fill="#ffb020" rx="2"/>
+  <text x="755" y="443" font-family="'Courier New', monospace" font-size="12" fill="#111317" font-weight="bold" text-anchor="middle">BUY &amp; TUNE ($480)</text>
+
+  <!-- Pixel Dither Overlay -->
+  <rect width="960" height="480" fill="url(#bayGrid)" pointer-events="none"/>
+</svg>

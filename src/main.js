@@ -47,7 +47,7 @@ import { buildCircuit } from './track.js';
 import { createHubRooms } from './rooms.js';
 import { createRivalManager } from './rivals.js';
 import { drawGunWorkbenchPreview } from './weaponArt.js';
-import { createCabin3DRig } from './cockpit3d.js';
+import { createCabin2D } from './cabin2d.js';
 import {
   COCKPIT_W,
   COCKPIT_H,
@@ -110,7 +110,6 @@ const gunshopModActionEl = document.getElementById('gunshop-mod-action');
 
 const settingsHeadingEl = document.getElementById('settings-heading');
 const btnToggleAudio = document.getElementById('btn-toggle-audio');
-const btnToggleCabin = document.getElementById('btn-toggle-cabin');
 const btnResetSave = document.getElementById('btn-reset-save');
 const btnResume = document.getElementById('btn-resume');
 const btnRestartRace = document.getElementById('btn-restart-race');
@@ -269,14 +268,13 @@ try {
   const postPass = createPsxPostPass();
   const textures = buildPsxTextures();
   const rooms = createHubRooms(scene, camera, textures);
-  const cabin3D = createCabin3DRig(rearTarget.texture, save.cabinMode);
-  function syncCabinSetting() {
-    cabin3D.setMode(save.cabinMode);
-    const coupe = save.cabinMode === 'coupe_3d';
-    btnToggleCabin.textContent = coupe ? 'CABIN: 3D COUPE' : 'CABIN: CLASSIC 2.5D PIXEL';
-    btnToggleCabin.setAttribute('aria-pressed', String(coupe));
-  }
-  syncCabinSetting();
+  const mirrorCanvas = document.createElement('canvas');
+  mirrorCanvas.width = 128;
+  mirrorCanvas.height = 44;
+  const mirrorCtx = mirrorCanvas.getContext('2d');
+  const mirrorImage = mirrorCtx.createImageData(128, 44);
+  const mirrorPixels = new Uint8Array(128 * 44 * 4);
+  const cabin = createCabin2D(mirrorCanvas);
 
   let activeTrack = null;
   let activeRivals = null;
@@ -297,7 +295,7 @@ try {
     }
   }
 
-  const cockpit = createCockpitController(cockpitCanvas, cabin3D, sound, {
+  const cockpit = createCockpitController(cockpitCanvas, cabin, sound, {
     isInteractive: () => phase === 'COUNTDOWN' || phase === 'RACING',
     getState: () => ({ car, nitro, loadout, carStats }),
     onWeaponFired: (ndcX, ndcY, gunStats) => {
@@ -1344,12 +1342,6 @@ try {
     btnToggleAudio.textContent = sound.muted ? 'AUDIO: OFF' : 'AUDIO: ON';
   }
   btnToggleAudio.addEventListener('click', toggleAudio);
-  btnToggleCabin.addEventListener('click', () => {
-    cockpit.releaseAllHolds(car, nitro);
-    save.cabinMode = save.cabinMode === 'coupe_3d' ? 'classic_25d' : 'coupe_3d';
-    syncCabinSetting();
-    persistSave(save);
-  });
 
   btnResetSave.addEventListener('click', () => {
     if (!resetConfirmArmed) {
@@ -1358,7 +1350,6 @@ try {
       return;
     }
     save = createDefaultSave();
-    syncCabinSetting();
     persistSave(save);
     resetConfirmArmed = false;
     btnResetSave.textContent = 'SAVE RESET!';
@@ -1567,7 +1558,6 @@ try {
     const fwdZ = curSmp.flatTan.z * cosH + curSmp.right.z * sinH;
     const carForward = new THREE.Vector3(fwdX, curSmp.tan.y, fwdZ).normalize();
     const carRight = new THREE.Vector3().crossVectors(carForward, upVec).normalize();
-    camera.position.addScaledVector(carRight, save.cabinMode === 'coupe_3d' ? -0.34 : 0);
 
     // Update backward-facing Rearview Mirror camera
     rearCamera.position.set(
@@ -1583,13 +1573,13 @@ try {
     rearCamera.lookAt(rearLook);
 
     // Update forward/side-window world camera
-    const headYawRad = cockpit.pointer.viewYaw * 1.38 + cockpit.pointer.panX * 0.11;
+    const headYawRad = cockpit.pointer.viewYaw * 1.38 + cockpit.pointer.panX * 0.035;
     const horizLook = carForward
       .clone()
       .multiplyScalar(Math.cos(headYawRad))
       .addScaledVector(carRight, Math.sin(headYawRad));
     const lookDir = horizLook
-      .addScaledVector(upVec, -cockpit.pointer.panY * 0.055)
+      .addScaledVector(upVec, -0.16 - cockpit.pointer.panY * 0.025)
       .normalize();
 
     camera.up.set(0, 1, 0);
@@ -1639,6 +1629,19 @@ try {
       renderer.setRenderTarget(rearTarget);
       renderer.clear();
       renderer.render(scene, rearCamera);
+      renderer.readRenderTargetPixels(rearTarget, 0, 0, 128, 44, mirrorPixels);
+      // WebGL rows start at the bottom; mirrors also reflect horizontally.
+      for (let y = 0; y < 44; y++) {
+        for (let x = 0; x < 128; x++) {
+          const from = ((43 - y) * 128 + 127 - x) * 4;
+          const to = (y * 128 + x) * 4;
+          mirrorImage.data[to] = mirrorPixels[from];
+          mirrorImage.data[to + 1] = mirrorPixels[from + 1];
+          mirrorImage.data[to + 2] = mirrorPixels[from + 2];
+          mirrorImage.data[to + 3] = 255;
+        }
+      }
+      mirrorCtx.putImageData(mirrorImage, 0, 0);
     }
 
     // Pass 2: 320x180 PSX World Render Target
@@ -1658,7 +1661,7 @@ try {
       renderer.render(rooms.gunPlaqueScene, camera);
     }
 
-    // Pass 4: 3D Perspective Pixel-Art Cabin + Foreground Hand/Weapon Overlay (during races)
+    // Pass 4: Projected 2D cabin and foreground hand/weapon overlay.
     if (inRaceScene && activeRivals) {
       const speedRatio = Math.min(1, Math.abs(car.speed) / 42);
       const shakeAmp =
@@ -1695,9 +1698,6 @@ try {
         shakeX,
         shakeY,
       });
-
-      renderer.clearDepth();
-      renderer.render(cabin3D.scene, cabin3D.camera);
     }
   }
 

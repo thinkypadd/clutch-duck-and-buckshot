@@ -742,7 +742,8 @@ export function drawEquippedWeaponFP(
   screenH,
   shakeX,
   shakeY,
-  animTime
+  animTime,
+  overHolster
 ) {
   const aimX = Math.max(20, Math.min(screenW - 20, pointerX));
   const aimY = Math.max(18, Math.min(screenH - 36, pointerY));
@@ -767,7 +768,6 @@ export function drawEquippedWeaponFP(
   const muzzleY = pivotY + uy * barrelLen;
 
   // Laser sight beam (Red for T1, Green for T3!)
-  const overHolster = pointerX > 252 && pointerY < 88;
   if (wep.stats.laserColor && !overHolster && wep.ammo > 0) {
     pxLine(ctx, muzzleX, muzzleY, aimX, aimY, wep.stats.laserColor, 1);
     pxFillCircle(ctx, aimX, aimY, 2, wep.stats.laserColor);

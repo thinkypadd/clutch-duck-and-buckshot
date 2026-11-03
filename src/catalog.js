@@ -1,8 +1,7 @@
 export const STORAGE_KEY = 'clutch_buckshot_save_v3';
 
-// Pure color Nitro boost stages (replaces 1X / 2X / 3X text)
-export const NITRO_STAGE_COLORS = ['#3bd156', '#3898ff', '#ff3b30', '#b84dff'];
-export const NITRO_STAGE_NAMES = ['GREEN', 'BLUE', 'RED', 'PURPLE'];
+export const NITRO_STAGE_COLORS = ['#3898ff', '#32e6d2', '#ff5599', '#a55cff'];
+export const NITRO_STAGE_NAMES = ['BLUE', 'CYAN', 'PINK', 'OVERDRIVE'];
 
 export const CARS = {
   junker: {
@@ -251,9 +250,9 @@ export const CAR_UPGRADES = {
     camFocus: { target: [0.28, 0.92, 0.04], dist: 2.45, yaw: -1.05, pitch: 0.3 },
     tiers: [
       { name: 'Empty Mount (No Nitro)', price: 0, desc: 'No N2O bottle or pull-handle installed.' },
-      { name: 'Street N2O Bottle (Green)', price: 220, desc: 'Installs bottle + handle. Unlocks GREEN boost.' },
-      { name: 'Purge N2O Kit (Blue)', price: 460, desc: '+30% PSI regen. Unlocks GREEN -> BLUE boost.' },
-      { name: 'Twin Race Rig (Red/Purple)', price: 780, desc: '+65% PSI regen. Unlocks RED (+PURPLE on Rally).' },
+      { name: 'Street N2O Bottle', price: 220, desc: 'Installs bottle + handle. Unlocks 1X blue boost.' },
+      { name: 'Purge N2O Kit', price: 460, desc: '+30% PSI regen. Unlocks 2X cyan boost.' },
+      { name: 'Twin Race Rig', price: 780, desc: '+65% PSI regen. Unlocks 3X pink boost and 4X purple overdrive on Apex Hatch.' },
     ],
   },
   trunk: {
@@ -633,7 +632,6 @@ export function createDefaultSave() {
     gunParts,
     ownedGunParts,
     godMode: false,
-    cabinMode: 'classic_25d',
     totalWins: 0,
     totalWrecks: 0,
   };
@@ -700,7 +698,7 @@ export function loadSave(storage = globalThis.localStorage) {
     }
     if (!TRACKS[merged.selectedTrack]) merged.selectedTrack = 'canyon';
     if (!LEAGUES[merged.selectedLeague]) merged.selectedLeague = 'scrapyard';
-    if (merged.cabinMode !== 'coupe_3d') merged.cabinMode = 'classic_25d';
+    delete merged.cabinMode;
 
     return merged;
   } catch {
@@ -758,7 +756,7 @@ export function getComputedCarStats(save, carId = save.selectedCar, previewParts
   const bumperRamMult = [1.0, 1.35, 1.7, 2.15][parts.bumper || 0];
   const ramMult = spec.ramMult * bumperRamMult;
 
-  // Nitro: Tier 0 = 0 stacks (uninstalled!), Tier 1 = 1 (Green), Tier 2 = 2 (Blue), Tier 3 = 3 (Red) or 4 (Purple on Rally!)
+  // Race N2O unlocks a fourth overdrive stack on the Apex Hatch.
   const nitroTier = parts.nitro || 0;
   const maxNitroStacks =
     nitroTier === 0

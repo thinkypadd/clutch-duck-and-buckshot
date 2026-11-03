@@ -1,7 +1,7 @@
 <div align="center">
 
 # 🏁 CLUTCH & BUCKSHOT 💥
-### *PSX Drive-By Combat Racer with 3D Perspective Pixel Cabin, Hinged Mechanic Bay & 8-Gun Armory*
+### *PSX Combat Racer with a 2D Perspective Cabin, Hinged Mechanic Bay & 8-Gun Armory*
 
 [![Play Live on GitHub Pages](https://img.shields.io/badge/PLAY_ONLINE-GITHUB_PAGES-ffb020?style=for-the-badge&logo=githubpages&logoColor=141619)](https://thinkypadd.github.io/clutch-duck-and-buckshot/)
 [![Three.js](https://img.shields.io/badge/3D_ENGINE-Three.js-000000?style=for-the-badge&logo=three.js&logoColor=white)](https://threejs.org/)
@@ -25,30 +25,33 @@
 
 ## ⚡ Overview
 
-**CLUTCH & BUCKSHOT** pairs a low-res **3D PSX world** in Three.js with a **true 3D perspective pixel-art cabin** built from angled pixel planes. Turning your head rotates inside the cockpit toward foreshortened Left and Right side doors instead of sliding flat sprites sideways.
+**CLUTCH & BUCKSHOT** pairs a low-poly **3D PSX world** in Three.js with a **2D perspective cabin overlay**. You drive and fight with one hand on the mouse. Turning your head to the side windows brings the door into view while the forward dashboard recedes out of reach. Center your view to steer, shift gears, trigger dashboard abilities, or reload off the passenger sun visor.
 
-You start with **`$0` cash**, a **`74 Rustbucket`** (`3-speed` junker, no Nitro, empty trunk), and an **`M1911 .45 Pistol`** on the visor. Your car accelerates automatically up to the speed band of your active gear while **1 mouse hand** handles steering, dynamic `3 -> 8` speed H-pattern shifting, overhead trunk traps, color-staged Nitro pulls, and manual gun reloads.
+You start with **`$0` cash**, a **`74 Rustbucket`** (a three-speed starter car with no nitrous and an empty trunk), and an **`M1911 .45 Pistol`** on the visor. Cars accelerate automatically up to the ceiling of their active gear. Wrecked rival cars remain burning on the circuit for the rest of the race. Win by finishing first after three laps or by wiping out every rival car on the track.
 
-Wrecked rival cars burn permanently on the circuit for the rest of the race. Win by crossing the finish line 1st after 3 laps or by wrecking every rival on the track.
+<div align="center">
+  <img src="https://raw.githubusercontent.com/thinkypadd/clutch-duck-and-buckshot/main/public/cockpit-view.svg" alt="2D Perspective Cabin view with live rearview mirror, H-pattern shifter, and visor weapon" width="100%"/>
+  <p><em>In-race perspective cabin: round steering wheel, sliding H-gate, live rearview mirror, and passenger visor weapons.</em></p>
+</div>
 
 ---
 
-## 🎮 3D Pixel Cabin & Controls
+## 🎮 2D Perspective Cabin & Controls
 
-Open **Settings → Cabin** to switch between **Classic 2.5D Pixel** (default) and **3D Coupe**. Both use perspective head turns and square-texel panel art; Coupe adds a left-hand driver position, raked windshield, inward-sloping windows, and an angled console. The choice is saved and can be changed while a race is paused.
+The cabin uses native pixel proportions facing forward. Hold `A` or `D` to peek toward a side window, or tap `Q` or `E` to lock the view sideways for drive-bys (`W` or `S` returns forward). Looking sideways trades access to driving controls for a clear shot at flanking rivals. The windshield mirror and driver-side mirror stream live backward-facing PSX views of the race.
 
 ```
   ┌────────────────────────────────────────────────────────────────────────────┐
-  │ [⚙]  [TRUNK TRAP]   [LIVE 3D REARVIEW MIRROR]     [PASSENGER SUN VISOR]   │
-  │      [OIL / MINE]   [◄ REAR PSX CAMERA FEED ►]    ┌───────────┬──────────┐ │
+  │ [⚙]                [LIVE 3D REARVIEW MIRROR]     [PASSENGER SUN VISOR]   │
+  │                    [◄ REAR PSX CAMERA FEED ►]    ┌───────────┬──────────┐ │
   │                                                   │ HOLSTERED │ AMMO     │ │
   │  ◄ [A] PEEK / [Q] LOCK           3D PSX           │ RELOAD    │ POUCH    │ │
   │    LEFT DRIVER DOOR             WINDSHIELD        └───────────┴──────────┘ │
   │    + SIDE MIRROR                                     RIGHT DOOR [D / E] ►  │
   │     ┌─────────────────┐     ┌───────────────┐                              │
-  │     │ RPM | MPH | HP  │     │  CAR GIMMICK  │   [SHORT-THROW]  [N2O MOUNT] │
+  │     │ RPM | MPH | HP  │     │  CAR GIMMICK  │   [SHORT-THROW]  [TRUNK TRAP] │
   │     └─────────────────┘     ├───────────────┤   [NITRO PULL]   ┌───┐ ┌───┐ │
-  │       (STEERING WHEEL)      │ 1  3  5  7    │   GRN>BLU>RED    │N2O│ │N2O│ │
+  │       (STEERING WHEEL)      │ 1  3  5  7    │   BLUE>PURPLE    │N2O│ │N2O│ │
   │        Left Driver Side     │ ├──┼──┼──┼──┐ │   (+PURPLE MAX)  └───┘ └───┘ │
   │                             │ 2  4  6  8  R │                              │
   └─────────────────────────────┴───────────────┴──────────────────────────────┘
@@ -56,60 +59,70 @@ Open **Settings → Cabin** to switch between **Classic 2.5D Pixel** (default) a
 
 | Control | Input | Behavior |
 | :--- | :--- | :--- |
-| **Steering Wheel** | Mouse Drag (Left) | Rotates wheel; self-centers with road feedback when released. |
-| **3-8 + R H-Shifter** | Mouse Drag (Center) | Auto-throttle climbs to active gear ceiling (`3` to `8` speeds per build). Downshift to engine-brake; `R` reverses. |
-| **Live Rearview + Trunk** | Overhead Bezel & Switch | Watch tailgaters in the live rear PSX mirror and click the overhead switch to drop Oil, Caltrops, Mines, or Napalm. |
-| **Color Nitro Handle** | Short Pull (Right) | Uninstalled at start. Upgrades unlock **Green** (Low), **Blue** (Mid), **Red** (High), and **Purple** (Rally Hatch Tier 3). |
-| **Side-Window Look** | Hold `A`/`D` or Tap `Q`/`E` | Hold `A`/`D` for quick peek (`±79°`), or tap `Q`/`E` to lock Left/Right window view (`W`/`S` centers forward). |
-| **Visor Arsenal** | Click & Drag (Top Right) | Unholster gun to aim and fire. Dock empty gun on visor for tactile manual reloads. |
+| **Steering Wheel** | Mouse Drag (Left) | Turns the car. Releases back to center with road chatter when let go. |
+| **3-8 + R H-Shifter** | Mouse Drag (Center) | Shifts through gears (3 to 8 speeds depending on vehicle). Downshift to engine-brake into corners; slot `R` to reverse. |
+| **Live Rearview + Trunk** | Windshield Mirror & Switch | Spot tailgaters in the live rear mirror and click the dashboard switch to drop Oil, Caltrops, Mines, or Napalm. |
+| **Nitro Gauge & Pull Handle** | Short Pull (Right) | Bottle fill shows remaining pressure. Stacked stages step through **Blue** (1X), **Cyan** (2X), **Pink** (3X), and **Purple Overdrive** (4X, Apex Hatch with Race N2O). |
+| **Side-Window Look** | Hold `A`/`D` or Tap `Q`/`E` | Hold `A`/`D` for a quick peek (`±79°`), or tap `Q`/`E` to lock the side view (`W`/`S` recenters). |
+| **Visor Arsenal** | Click & Drag (Top Right) | Unholster gun to aim and fire. Dock empty weapon back on the visor to reload. |
 
 ---
 
 ## 🏛️ 5 Interactive 3D Hub Rooms
 
-Every menu opens its own stationary 3D PSX room with manual drag-orbit, scroll-wheel zoom, preview-before-buy inspection, and permanent part ownership (swapping or downgrading owned parts is always free):
+Menus open in stationary 3D rooms with manual drag orbit, scroll-wheel zoom, preview-before-buy inspection, and permanent part ownership (swapping or downgrading purchased parts is always free):
 
-1. **Forecourt (`Main Menu`):** Active build parked outside the dusk garage bay.
-2. **Race Briefing:** 3D topographic route table (`Canyon Pass` / `Badlands Flats`) and 3 League Tiers (`Scrapyard Cup`, `Street Outlaw`, `Syndicate Pro`).
-3. **8-Bay Showroom:** Walk the lot of all 8 vehicles, inspect saved builds in 360°, buy, drive, or trade in owned cars for **70% value**.
-4. **Mechanic Lift Bay:** Selecting any of the **9 upgrade slots** swings open the **hinged 3D Hood (with prop-rod), Driver Door, or Trunk Lid** and zooms the camera straight onto the subsystem before you buy.
-5. **3D Gun Shop & Zoomable Workbench:** Click any of the **8 weapons** on the 3D pegboard wall and inspect **5 visual attachment slots** at `3x` pixel zoom.
+1. **Garage Forecourt (`Main Menu`):** Your active car parked outside the dusk garage bay.
+2. **Race Briefing:** 3D topographic route table (`Canyon Pass` or `Badlands Flats`) and 3 League Tiers (`Scrapyard Cup`, `Street Outlaw`, and `Syndicate Pro`).
+3. **8-Bay Showroom:** Inspect all eight vehicles in 360°, test-drive, buy, or trade in owned cars for **70% of total invested value**.
+4. **Mechanic Lift Bay:** Selecting any of the **9 upgrade slots** swings open the **hinged 3D Hood (with prop rod), Driver Door, or Trunk Lid** and focuses the camera on the subsystem.
+5. **Gun Shop & Workbench:** Select any of the **8 weapons** from the wall pegboard and preview **5 attachment slots** under 3x pixel zoom.
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/thinkypadd/clutch-duck-and-buckshot/main/public/mechanic-bay.svg" alt="3D Mechanic Workshop Bay with open panels and subsystem inspection" width="100%"/>
+  <p><em>Mechanic Workshop Bay: live 3D preview, hinged panels (hood, doors, trunk), and manual 360° orbit.</em></p>
+</div>
 
 ---
 
-## 🏎️ 8 Vehicles (`3 -> 8` Speeds & Cabin Gimmicks)
+## 🏎️ 8 Vehicles (3 to 8 Speeds & Dashboard Abilities)
 
-| Vehicle | Gearbox | Signature Gimmick |
+| Vehicle | Gearbox | Signature Ability |
 | :--- | :--- | :--- |
 | **74 Rustbucket** (`$0`) | `3 -> 4` Spd | **Choke Surge Knob:** Rich-fuel low-gear torque burst before engine heat spikes. |
-| **86 Kuruma Coupe** (`$450`) | `4 -> 6` Spd | **Redline V-Cam:** Dash toggle adds `+18%` upper-RPM cam pull near redline. |
-| **Baja Dune Buggy** (`$720`) | `4 -> 6` Spd | **Hydro-Jump + Sand Spec:** Zero off-road drag + hydraulic jump shocks to vault burning wrecks. |
-| **V8 Interceptor** (`$980`) | `5 -> 6` Spd | **Blower Overdrive:** Supercharger switch (`+22%` torque) + `2.2X` heavy ramming damage. |
-| **Iron Mule Ute** (`$1300`) | `5 -> 6` Spd | **Dual Visor Holsters:** Carries both Primary and Secondary weapons on the visor for 1-click hot-swaps. |
+| **86 Kuruma Coupe** (`$450`) | `4 -> 6` Spd | **Redline V-Cam:** Toggle adds 18% upper-RPM cam pull near redline. |
+| **Baja Dune Buggy** (`$720`) | `4 -> 6` Spd | **Hydro-Jump & Sand Spec:** Zero off-road speed penalty plus hydraulic jump shocks to vault burning wrecks. |
+| **V8 Interceptor** (`$980`) | `5 -> 6` Spd | **Blower Overdrive:** Supercharger toggle adds 22% torque plus 2.2X ramming damage. |
+| **Iron Mule Ute** (`$1300`) | `5 -> 6` Spd | **Dual Visor Holsters:** Carries primary and secondary weapons on the visor for one-click swaps. |
 | **82 Rotary Coupe** (`$1680`) | `5 -> 7` Spd | **Twin-Pipe Backfire:** Ignites unburned exhaust fireballs to scorch tailgaters behind you. |
-| **Apex Turbo Hatch** (`$2150`) | `6 -> 7` Spd | **Purple Nitro + Drift Lever:** Unlocks the 4th **Purple** Nitro stage (with Race N2O) + hydraulic drift lever. |
-| **Valkyrie GT-X** (`$3100`) | `6 -> 8` Spd | **Active Aero Wing:** Motorized wing toggles between `+35%` Corner Grip and `+12%` Slipstream Top Speed. |
+| **Apex Turbo Hatch** (`$2150`) | `6 -> 7` Spd | **Purple Nitro & Drift Lever:** Unlocks 4th **Purple** Nitro stage (with Race N2O) plus a hydraulic drift lever. |
+| **Valkyrie GT-X** (`$3100`) | `6 -> 8` Spd | **Active Aero Wing:** Motorized rear wing toggles between 35% corner grip and 12% slipstream top speed. |
 
 ### 9 Visible Mechanic Upgrade Slots
-- **Under-Hood Engine Bay:** `Engine Block` (I4 -> Twin-Cam -> V8 -> Gold Twin-Turbo V8), `Air Intake` (Pod -> Twin-Carb Scoop -> Chrome Bugcatcher Blower), `Cooling` (Copper Rad -> Front Oil Cooler + Braided Lines).
-- **Interior Cabin:** `Gearbox` (`3..8`-speed gated H-shifters + live pixel gate diagram), `Nitrous` (Empty Bracket -> Green Bottle -> Blue Purge -> Twin Red/Purple Race Rig).
-- **Rear Trunk Countermeasures:** `Empty Bay` -> `55-Gal Oil Drum` -> `Caltrop Chute` -> `Proximity Mine Rack` -> `Twin Napalm Tanks`.
-- **Exterior Chassis:** `Window & Rollcage Armor`, `Front Ramming Bumper` (Push-Bar -> Bullbar -> V-Plow Wedge), `Tires & Aero` (Knobbies -> Slicks + Wing -> Run-Flats + Wheel Spinners).
+- **Engine Bay (Under Hood):** `Engine Block` (I4, Twin-Cam, V8, or Twin-Turbo V8), `Air Intake` (Pod, Twin-Carb Scoop, or Chrome Bugcatcher Blower), `Cooling` (Copper Radiator or Front Oil Cooler with braided lines).
+- **Cabin Interior:** `Gearbox` (3 to 8 speed gated H-shifters with pixel diagram), `Nitrous System` (Empty bracket, street bottle, purge kit, or twin race rig).
+- **Rear Trunk Traps:** `Empty Bay`, `55-Gallon Oil Drum`, `Caltrop Chute`, `Proximity Mine Rack`, or `Twin Napalm Tanks`.
+- **Exterior Chassis:** `Window & Rollcage Armor`, `Front Ramming Bumper` (Push-bar, bullbar, or wedge plow), `Tires & Aero` (Knobbies, slicks with wing, or run-flats with wheel spinners).
 
 ---
 
 ## 🔫 8-Gun Arsenal & 6 Manual Reload Systems
 
-- **M1911 .45 Pistol (`$0` Starter):** Drop spent mag -> drag fresh mag into well -> rack top slide.
-- **Sawed-Off 12G (`$320`):** Break barrels -> flick 2 brass hulls out -> feed 2 shells -> snap shut.
-- **.357 Magnum (`$580`):** Swing cylinder -> tap ejector rod -> load pairs (or **1-drag 6-shot Speedloader** at Loader Tier 2).
-- **Trench Pump 12G (`$780`):** Thumb shells into bottom tube -> rack wood pump forend (unlocks hold-click **Slam-Fire** at Action Tier 2).
-- **Viper 9mm SMG (`$950`):** Drop stick mag -> slap 24/36/50-round mag in -> pull top charging bolt.
-- **Mares Leg .45-70 (`$1350`):** Feed heavy brass into brass side-gate -> cycle large-loop lever.
-- **Draco 7.62 AK (`$1750`):** Rock curved/drum mag out -> lock fresh mag -> rip bolt carrier.
-- **M79 40mm Thumper (`$2300`):** Break single 40mm tube -> pop casing -> seat high-explosive grenade (`11.5m+` blast radius).
+<div align="center">
+  <img src="https://raw.githubusercontent.com/thinkypadd/clutch-duck-and-buckshot/main/public/gun-shop.svg" alt="3D Gun Shop Pegboard Wall and 3X Zoomable Pixel Workbench" width="100%"/>
+  <p><em>Gun Shop Armory: pegboard wall plaques, 3x pixel workbench, and preview-before-buy upgrades.</em></p>
+</div>
 
-> **Dev / Sandbox Shortcut:** Press `` ` `` (Backtick) or click the `GARAGE / SETTINGS` header 5 times inside the `[⚙]` modal to open the **Developer Sandbox** (`+$1k`, `+$10k`, `Unlock All`, `God Mode`, `Wreck All Rivals`).
+- **M1911 .45 Pistol (`$0` Starter):** Drop spent magazine, slide fresh mag into well, and rack the slide.
+- **Sawed-Off 12G (`$320`):** Break barrels open, flick two spent hulls out, feed two shells, and snap shut.
+- **.357 Magnum (`$580`):** Swing cylinder out, push ejector rod, and load cartridges (or use the one-drag **6-shot Speedloader** at Loader Tier 2).
+- **Trench Pump 12G (`$780`):** Thumb shells into the magazine tube and rack the wooden forend (unlocks hold-click **Slam-Fire** at Action Tier 2).
+- **Viper 9mm SMG (`$950`):** Drop stick mag, slot in 24/36/50-round mag, and pull the charging bolt.
+- **Mares Leg .45-70 (`$1350`):** Feed brass into the side gate and cycle the lever loop.
+- **Draco 7.62 AK (`$1750`):** Rock curved or drum magazine out, lock in fresh mag, and cycle the bolt carrier.
+- **M79 40mm Thumper (`$2300`):** Break 40mm barrel open, extract spent casing, and seat an explosive grenade (11.5m blast radius).
+
+> **Developer Sandbox:** Press `` ` `` (backtick) or click `SETTINGS & CONTROLS` five times inside the `[⚙]` modal to open the console (`+$1k`, `+$10k`, `Unlock All Items`, `God Mode Armor`, `Wreck All Rivals`).
 
 ---
 
@@ -129,6 +142,6 @@ Open `http://localhost:5173` in your browser.
 
 ## 🏁 Live Deployment
 
-GitHub Actions runs `npm test` and `npm run build` on every push to `main` and deploys to GitHub Pages:
+GitHub Actions runs tests and builds on every push to `main`, then publishes to GitHub Pages:
 
 👉 **[https://thinkypadd.github.io/clutch-duck-and-buckshot/](https://thinkypadd.github.io/clutch-duck-and-buckshot/)**

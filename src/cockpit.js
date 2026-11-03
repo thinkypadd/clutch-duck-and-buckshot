@@ -1,6 +1,7 @@
 import { NITRO_STAGE_COLORS } from './catalog.js';
 import {
   MAX_WHEEL_RAD,
+  getNitroStageInfo,
   getActiveWeapon,
   swapDualWeapon,
   equipWeapon,
@@ -50,19 +51,19 @@ import {
 export const COCKPIT_W = 480;
 export const COCKPIT_H = 270;
 
-// Plane-local coordinates:
-// 1. Windshield Plane (480 x 270)
+// Source-art coordinates; cabin2d.js maps these into the visible cabin.
+// 1. Windshield canvas (480 x 270)
 const TRUNK_BTN = { x: 56, y: 15, w: 82, h: 29 };
 const MIRROR_BEZEL = { x: 146, y: 14, w: 108, h: 30 };
 const MIRROR_CUTOUT = { x: 150, y: 17, w: 100, h: 24 };
 const VISOR_ORIGIN = { x: 266, y: 11 };
 
-// 2. Dash Plane (480 x 140)
+// 2. Dashboard canvas (480 x 140)
 const SHIFTER_BOX = { x: 208, y: 50, w: 92, h: 78 };
 const GIMMICK_BTN = { x: 208, y: 20, w: 92, h: 25 };
 const DRIFT_LEVER = { x: 184, y: 34, w: 19, h: 68 };
 
-// 3. Foreground Wheel & Pull-Handle Plane (480 x 140)
+// 3. Wheel and pull-handle canvas (480 x 140)
 const WHEEL_HUB = { x: 114, y: 84, rOuter: 48, rInner: 36 };
 const NITRO_TRACK = { x: 350, yTop: 38, yBot: 78, handleW: 54, handleH: 18 };
 
@@ -148,7 +149,7 @@ export function drawHGatePreviewCanvas(canvas, maxGears = 5, transTier = 0) {
   pxFillCircle(ctx, p1.x - 2, p1.y - 8, 4, knobCol);
 }
 
-export function createCockpitController(overlayCanvas, cabin3D, sound, callbacks) {
+export function createCockpitController(overlayCanvas, cabin, sound, callbacks) {
   overlayCanvas.width = COCKPIT_W;
   overlayCanvas.height = COCKPIT_H;
   const overlayCtx = overlayCanvas.getContext('2d');
@@ -301,10 +302,10 @@ export function createCockpitController(overlayCanvas, cabin3D, sound, callbacks
 
   function getLayerHits(ndcX, ndcY) {
     return {
-      wind: cabin3D.projectToLayer('windshield', ndcX, ndcY,
+      wind: cabin.projectToLayer('windshield', ndcX, ndcY,
         ['spent_hull', 'fresh_ammo', 'slide_rack'].includes(activeHold)),
-      dash: cabin3D.projectToLayer('dash', ndcX, ndcY, activeHold === 'shifter'),
-      wp: cabin3D.projectToLayer('wheelPull', ndcX, ndcY, activeHold === 'wheel' || activeHold === 'nitro'),
+      dash: cabin.projectToLayer('dash', ndcX, ndcY, activeHold === 'shifter'),
+      wp: cabin.projectToLayer('wheelPull', ndcX, ndcY, activeHold === 'wheel' || activeHold === 'nitro'),
     };
   }
 
@@ -688,22 +689,21 @@ export function createCockpitController(overlayCanvas, cabin3D, sound, callbacks
     const layout = getHGateLayout(carStats.maxGears, SHIFTER_BOX);
     const snapRadius = 10.5 + (carStats.parts.trans || 0) * 2.2;
 
-    for (const pocket of layout.pockets) {
-      if (Math.hypot(shifterKnobPos.x - pocket.x, shifterKnobPos.y - pocket.y) <= snapRadius) {
-        const oldGear = car.gear;
-        if (shiftGear(car, pocket.gear, carStats.maxGears)) {
-          sound.playGearShift(pocket.gear < oldGear);
-          const lbl = pocket.gear === -1 ? 'REVERSE' : `GEAR ${pocket.gear}/${carStats.maxGears}`;
-          setStatus(
-            pocket.gear > 0 && pocket.gear < oldGear ? `${lbl} ENGINE BRAKE` : lbl,
-            '#6be36b',
-            1.1
-          );
-        }
-        shifterKnobPos.x = pocket.x;
-        shifterKnobPos.y = pocket.y;
-        return;
+    const distance = pocket => Math.hypot(shifterKnobPos.x - pocket.x, shifterKnobPos.y - pocket.y);
+    const pocket = layout.pockets.reduce((best, candidate) => distance(candidate) < distance(best) ? candidate : best);
+    if (distance(pocket) <= snapRadius) {
+      const oldGear = car.gear;
+      if (shiftGear(car, pocket.gear, carStats.maxGears)) {
+        sound.playGearShift(pocket.gear < oldGear);
+        const lbl = pocket.gear === -1 ? 'REVERSE' : `GEAR ${pocket.gear}/${carStats.maxGears}`;
+        setStatus(
+          pocket.gear > 0 && pocket.gear < oldGear ? `${lbl} ENGINE BRAKE` : lbl,
+          '#6be36b',
+          1.1
+        );
       }
+      shifterKnobPos.x = pocket.x;
+      shifterKnobPos.y = pocket.y;
     }
   }
 
@@ -859,7 +859,7 @@ export function createCockpitController(overlayCanvas, cabin3D, sound, callbacks
       const { loadout } = callbacks.getState();
       const wep = getActiveWeapon(loadout);
       if (wep.mode === 'EQUIPPED' && wep.stats.isAuto && wep.ammo > 0 && wep.fireCooldown <= 0) {
-        const windPt = cabin3D.projectToLayer('windshield', pointer.ndcX, pointer.ndcY);
+        const windPt = cabin.projectToLayer('windshield', pointer.ndcX, pointer.ndcY);
         const overHolster =
           windPt &&
           inRect(
@@ -916,7 +916,7 @@ export function createCockpitController(overlayCanvas, cabin3D, sound, callbacks
   }
 
   function paintHoodLayer(car, carStats) {
-    const { ctx, width, height } = cabin3D.layers.hood;
+    const { ctx, width, height } = cabin.layers.hood;
     ctx.clearRect(0, 0, width, height);
 
     const hoodTilt = -(car.wheelAngle / MAX_WHEEL_RAD) * 3;
@@ -966,7 +966,7 @@ export function createCockpitController(overlayCanvas, cabin3D, sound, callbacks
 
   function paintSideDoors(carStats) {
     const armorTier = carStats.parts.armor || 0;
-    const { leftDoor, rightDoor } = cabin3D.layers;
+    const { leftDoor, rightDoor } = cabin.layers;
     const doorCardY = 178;
 
     // Left Driver Door (u=1 / x=width is FRONT A-pillar & Side Mirror; u=0 / x=0 is REAR B-pillar)
@@ -988,7 +988,7 @@ export function createCockpitController(overlayCanvas, cabin3D, sound, callbacks
       pxOutlineRect(ctx, w - 82, doorCardY + 10, 24, 10, '#7c8496', '#111317');
       pxText(ctx, 'DRIVER WINDOW', w / 2 + 8, doorCardY + 6, '#8d97ad', 1, 'center');
 
-      // Exterior Driver Side-View Mirror housing (cutout x=307..355, y=139..167 reveals sideMirrorMesh!)
+      // cabin2d.js fills this side-mirror cutout with the live rear feed.
       pxOutlineRect(ctx, w - 82, 134, 58, 38, '#232833', '#0e1014');
       ctx.clearRect(w - 77, 139, 48, 28);
       pxOutlineRect(ctx, w - 78, 138, 50, 30, null, '#8b97ad');
@@ -1046,44 +1046,6 @@ export function createCockpitController(overlayCanvas, cabin3D, sound, callbacks
     }
   }
 
-  function paintRearBulkhead(carStats) {
-    const rearLayer = cabin3D.layers.rearWall;
-    if (!rearLayer) return;
-    const { ctx, width: w, height: h } = rearLayer;
-    const armorTier = carStats.parts.armor || 0;
-
-    // Fully opaque rear cabin interior (C-pillars, rear parcel deck, tinted rear glass & bucket seats)
-    pxRect(ctx, 0, 0, w, h, '#14171f');
-    pxRect(ctx, 0, 0, w, 24, '#181b22');
-    pxRect(ctx, 0, 0, 56, h, '#191c24');
-    pxRect(ctx, w - 56, 0, 56, h, '#191c24');
-
-    // Tinted rear glass slit (with defroster lines)
-    pxOutlineRect(ctx, 56, 26, w - 112, 86, '#1c2430', '#2f3645');
-    for (let dy = 38; dy < 106; dy += 14) {
-      pxLine(ctx, 60, dy, w - 60, dy, 'rgba(212, 155, 53, 0.22)', 1);
-    }
-
-    if (armorTier >= 1) {
-      // Rear X-brace rollcage bar across rear bulkhead
-      pxLine(ctx, 58, 28, w - 58, 110, '#687285', 6);
-      pxLine(ctx, w - 58, 28, 58, 110, '#687285', 6);
-    }
-
-    // Rear parcel shelf & trunk firewall
-    pxOutlineRect(ctx, 0, 112, w, h - 112, '#181b22', '#2f3542');
-
-    // Driver & Passenger Racing Bucket Seatbacks + Headrests
-    for (const sx of [96, w - 96]) {
-      pxOutlineRect(ctx, sx - 44, 116, 88, h - 116, '#202530', '#0e1015');
-      pxOutlineRect(ctx, sx - 30, 124, 60, h - 128, '#282e3b', '#14171e');
-      // Headrest + harness pass-through slots
-      pxOutlineRect(ctx, sx - 24, 72, 48, 48, '#232834', '#0e1015');
-      pxRect(ctx, sx - 16, 102, 11, 8, '#0c0e12');
-      pxRect(ctx, sx + 5, 102, 11, 8, '#0c0e12');
-    }
-  }
-
   function paintWindshieldLayer(
     car,
     loadout,
@@ -1096,7 +1058,7 @@ export function createCockpitController(overlayCanvas, cabin3D, sound, callbacks
     windPt,
     pulse
   ) {
-    const { ctx, width, height } = cabin3D.layers.windshield;
+    const { ctx, width, height } = cabin.layers.windshield;
     ctx.clearRect(0, 0, width, height);
 
     const armorTier = carStats.parts.armor || 0;
@@ -1209,7 +1171,7 @@ export function createCockpitController(overlayCanvas, cabin3D, sound, callbacks
       }
     }
 
-    // Live 3D Rearview Mirror Bezel & Roof Mounting Stalk (cutout reveals 3D mirrorMesh!)
+    // Rearview bezel and mounting stalk; cabin2d.js fills the live feed.
     pxRect(ctx, 196, 10, 8, 6, '#2d3340');
     const mirBorder = tailgaterClose && pulse ? '#ff5242' : '#586275';
     pxOutlineRect(
@@ -1253,7 +1215,7 @@ export function createCockpitController(overlayCanvas, cabin3D, sound, callbacks
   }
 
   function paintDashLayer(car, nitro, loadout, carStats, dashPt, pulse, godMode) {
-    const { ctx, width, height } = cabin3D.layers.dash;
+    const { ctx, width, height } = cabin.layers.dash;
     ctx.clearRect(0, 0, width, height);
 
     const wep = getActiveWeapon(loadout);
@@ -1562,13 +1524,7 @@ export function createCockpitController(overlayCanvas, cabin3D, sound, callbacks
     pxFillCircle(ctx, knobX, knobY, 5, knobCol);
     pxFillCircle(ctx, knobX - 1, knobY - 2, 2, '#ffffff');
 
-    // Status ticker banner when car uses GIMMICK_BTN for an active switch
-    if (statusBanner.timer > 0 && gType !== 'dual_gun') {
-      pxOutlineRect(ctx, 46, 66, 136, 14, '#0c0e12', statusBanner.color);
-      pxText(ctx, statusBanner.text.slice(0, 22), 114, 70, statusBanner.color, 1, 'center');
-    }
-
-    // 3. Passenger Nitrous Bay: Empty Mount at Tier 0 vs Pure Color Stage Blocks (NO 1X/2X/3X text!)
+    // Passenger nitrous bay and pressure gauge.
     const nitroTier = carStats.parts.nitro || 0;
     const npx = 312;
     const npy = 88;
@@ -1581,64 +1537,49 @@ export function createCockpitController(overlayCanvas, cabin3D, sound, callbacks
       pxText(ctx, 'BUY IN MECHANIC', npx + 71, 99, '#586175', 1, 'center');
     } else {
       pxOutlineRect(ctx, npx, npy, 84, 40, '#0e1015', '#424959');
-      pxOutlineRect(ctx, npx + 5, npy + 5, 74, 9, '#07080a', '#525a6b');
+      const stage = getNitroStageInfo(nitro.stacks);
+      const gaugeColor = stage.active ? stage.color : '#58a6ff';
+      const gaugeLabel = nitro.lowPsiFlash > 0 ? 'LOW N2O'
+        : nitro.stacks >= 4 ? 'OVERDRIVE' : nitro.stacks > 0 ? `N2O ${nitro.stacks}X` : 'N2O READY';
+      pxText(ctx, gaugeLabel, npx + 42, npy + 4,
+        nitro.lowPsiFlash > 0 ? '#ffb9ad' : gaugeColor, 1, 'center');
+      pxOutlineRect(ctx, npx + 5, npy + 13, 74, 17, '#07080a', gaugeColor);
       const psiW = Math.round((nitro.meter / 100) * 70);
       pxRect(
         ctx,
         npx + 7,
-        npy + 7,
+        npy + 15,
         psiW,
-        5,
-        nitro.lowPsiFlash > 0 ? '#ff5242' : nitro.meter >= 30 ? '#45c4d6' : '#8a6626'
+        13,
+        gaugeColor
       );
-
-      // Pure Color Boost Blocks (Green -> Blue -> Red -> Purple, ZERO numeric 1X/2X/3X text!)
-      const maxSt = nitro.maxStacks;
-      const gap = 3;
-      const blockW = Math.floor((74 - (maxSt - 1) * gap) / maxSt);
-      for (let s = 1; s <= maxSt; s++) {
-        const lx = npx + 5 + (s - 1) * (blockW + gap);
-        const active = nitro.stacks >= s;
-        const stCol = NITRO_STAGE_COLORS[s - 1];
-        pxOutlineRect(
-          ctx,
-          lx,
-          npy + 18,
-          blockW,
-          15,
-          active ? stCol : '#181c24',
-          active ? '#ffffff' : stCol
-        );
-        if (active) {
-          pxRect(ctx, lx + 2, npy + 20, blockW - 4, 3, 'rgba(255,255,255,0.45)');
-        }
-      }
+      pxText(ctx, `${Math.round(nitro.meter)}%`, npx + 42, npy + 33, '#cbc1ab', 1, 'center');
 
       // Visible Passenger N2O Bottle(s) matching tier!
       const btx = 400;
-      const bty = 48;
+      const bty = 58;
       if (nitroTier === 1) {
-        pxOutlineRect(ctx, btx + 12, bty + 8, 24, 68, '#289c44', '#101812');
-        pxRect(ctx, btx + 16, bty + 10, 6, 62, '#5ae078');
+        pxOutlineRect(ctx, btx + 12, bty + 8, 24, 54, '#289c44', '#101812');
+        pxRect(ctx, btx + 16, bty + 10, 6, 48, '#5ae078');
         pxRect(ctx, btx + 19, bty, 10, 9, '#9aa4b8');
-        pxText(ctx, 'N2O', btx + 24, bty + 36, '#0d140e', 1, 'center');
+        pxText(ctx, 'N2O', btx + 24, bty + 33, '#0d140e', 1, 'center');
       } else if (nitroTier === 2) {
         pxLine(ctx, btx + 23, bty + 4, btx - 8, bty + 16, '#b8c2d6', 3);
-        pxOutlineRect(ctx, btx + 8, bty + 6, 30, 72, '#226bc2', '#10141c');
-        pxRect(ctx, btx + 13, bty + 8, 7, 66, '#58a6ff');
+        pxOutlineRect(ctx, btx + 8, bty + 6, 30, 58, '#226bc2', '#10141c');
+        pxRect(ctx, btx + 13, bty + 8, 7, 52, '#58a6ff');
         pxFillCircle(ctx, btx + 23, bty + 20, 5, '#f4efe6');
-        pxText(ctx, 'PURGE', btx + 23, bty + 44, '#ffeb75', 1, 'center');
+        pxText(ctx, 'PURGE', btx + 23, bty + 37, '#ffeb75', 1, 'center');
       } else {
         pxLine(ctx, btx + 12, bty + 4, btx - 10, bty + 18, '#d4deed', 3);
         pxLine(ctx, btx + 36, bty + 4, btx - 10, bty + 24, '#d4deed', 3);
-        pxOutlineRect(ctx, btx + 2, bty + 6, 22, 72, '#c92a22', '#171010');
-        pxRect(ctx, btx + 6, bty + 8, 5, 66, '#ff7369');
+        pxOutlineRect(ctx, btx + 2, bty + 6, 22, 58, '#c92a22', '#171010');
+        pxRect(ctx, btx + 6, bty + 8, 5, 52, '#ff7369');
         pxOutlineRect(
           ctx,
           btx + 26,
           bty + 6,
           22,
-          72,
+          58,
           carStats.spec.purpleNitroCapable ? '#7d2bc9' : '#c99722',
           '#17140d'
         );
@@ -1647,7 +1588,7 @@ export function createCockpitController(overlayCanvas, cabin3D, sound, callbacks
           btx + 30,
           bty + 8,
           5,
-          66,
+          52,
           carStats.spec.purpleNitroCapable ? '#cf8cff' : '#ffe07d'
         );
       }
@@ -1655,7 +1596,7 @@ export function createCockpitController(overlayCanvas, cabin3D, sound, callbacks
   }
 
   function paintWheelPullLayer(car, nitro, loadout, carStats, wpPt) {
-    const { ctx, width, height } = cabin3D.layers.wheelPull;
+    const { ctx, width, height } = cabin.layers.wheelPull;
     ctx.clearRect(0, 0, width, height);
 
     const wep = getActiveWeapon(loadout);
@@ -1730,18 +1671,13 @@ export function createCockpitController(overlayCanvas, cabin3D, sound, callbacks
         );
       pxRect(ctx, ntx - 2, ntyTop + 2, 4, Math.max(3, curHandleY - ntyTop), '#adb8cc');
 
-      const nextStageIdx = Math.min(
-        NITRO_STAGE_COLORS.length - 1,
-        Math.max(0, nitro.stacks < nitro.maxStacks ? nitro.stacks : nitro.maxStacks - 1)
-      );
-      const handleCol = NITRO_STAGE_COLORS[nextStageIdx];
       pxOutlineRect(
         ctx,
         ntx - NITRO_TRACK.handleW / 2,
         curHandleY - NITRO_TRACK.handleH / 2,
         NITRO_TRACK.handleW,
         NITRO_TRACK.handleH,
-        handleCol,
+        '#9aa4b8',
         handleHover || nitro.dragging ? '#ffffff' : '#101216'
       );
       pxText(ctx, 'BOOST', ntx, curHandleY - 2, '#0c0e12', 1, 'center');
@@ -1819,8 +1755,8 @@ export function createCockpitController(overlayCanvas, cabin3D, sound, callbacks
     shakeX,
     shakeY,
   }) {
-    // 1. Update 3D Cabin Camera Perspective BEFORE raycasting hover coordinates
-    cabin3D.updateCamera(
+    // Use the same view transform for painting and pointer coordinates.
+    cabin.updateCamera(
       pointer.viewYaw,
       pointer.panX,
       pointer.panY,
@@ -1832,10 +1768,8 @@ export function createCockpitController(overlayCanvas, cabin3D, sound, callbacks
     const pulse = Math.floor(animTime * 5.8) % 2 === 0;
     const hits = getLayerHits(pointer.ndcX, pointer.ndcY);
 
-    // 2. Paint all 7 modular 3D cabin canvases & upload textures
     paintHoodLayer(car, carStats);
     paintSideDoors(carStats);
-    paintRearBulkhead(carStats);
     paintWindshieldLayer(
       car,
       loadout,
@@ -1850,10 +1784,8 @@ export function createCockpitController(overlayCanvas, cabin3D, sound, callbacks
     );
     paintDashLayer(car, nitro, loadout, carStats, hits.dash, pulse, godMode);
     paintWheelPullLayer(car, nitro, loadout, carStats, hits.wp);
-    cabin3D.markAllUpdated();
-
-    // 3. Paint crisp 2D Foreground Overlay (Nitro speed lines, smoke, brass, cues, weapon/glove)
     overlayCtx.clearRect(0, 0, COCKPIT_W, COCKPIT_H);
+    cabin.draw(overlayCtx, carStats, tailgaterClose);
 
     if (nitro.stacks > 0 && Math.abs(pointer.viewYaw) < 0.45) {
       const stageCol = NITRO_STAGE_COLORS[Math.min(NITRO_STAGE_COLORS.length - 1, nitro.stacks - 1)];
@@ -1878,6 +1810,11 @@ export function createCockpitController(overlayCanvas, cabin3D, sound, callbacks
 
     for (const b of fallingBrass) {
       drawAmmoItem(overlayCtx, b.x - 4, b.y - 10, b.gunId, b.loaderTier, b.ammoTier, true, false);
+    }
+
+    if (statusBanner.timer > 0) {
+      pxOutlineRect(overlayCtx, 80, 44, 128, 14, '#0c0e12', statusBanner.color);
+      pxText(overlayCtx, statusBanner.text.slice(0, 30), 144, 48, statusBanner.color, 1, 'center');
     }
 
     // Side-window threat & Q/E lock indicators
@@ -1962,7 +1899,8 @@ export function createCockpitController(overlayCanvas, cabin3D, sound, callbacks
         COCKPIT_H,
         shakeX,
         shakeY,
-        animTime
+        animTime,
+        hits.wind && inRect(hits.wind.x - VISOR_ORIGIN.x, hits.wind.y - VISOR_ORIGIN.y, HOLSTER_LOCAL, 6)
       );
     } else {
       drawDriverHand(
