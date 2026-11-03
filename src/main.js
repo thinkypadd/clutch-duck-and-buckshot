@@ -207,9 +207,20 @@ try {
     powerPreference: 'high-performance',
   });
   renderer.setPixelRatio(1);
-  renderer.setSize(COCKPIT_W, COCKPIT_H, false);
   renderer.autoClear = false;
   renderer.setClearColor(SHOWROOM_FOG, 1);
+
+  function syncRendererSize() {
+    const rect = viewportEl.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.max(COCKPIT_W, Math.min(2560, Math.round((rect.width || 1280) * dpr)));
+    const h = Math.max(COCKPIT_H, Math.min(1440, Math.round((rect.height || 720) * dpr)));
+    if (glCanvas.width !== w || glCanvas.height !== h) {
+      renderer.setSize(w, h, false);
+    }
+  }
+  syncRendererSize();
+  window.addEventListener('resize', syncRendererSize);
 
   const scene = new THREE.Scene();
 
@@ -1619,10 +1630,17 @@ try {
     renderer.clear();
     renderer.render(scene, camera);
 
-    // Pass 3: Dithered 5-bit RGB PSX Post-Pass onto glCanvas
+    // Pass 3: Dithered 5-bit RGB PSX Post-Pass onto full-res glCanvas
+    syncRendererSize();
     renderer.setRenderTarget(null);
     renderer.clear();
     renderer.render(postPass.postScene, postPass.postCamera);
+
+    // Pass 3.5: Crisp Gun Shop Pegboard Plaques (bypasses 320x180 PSX filter so wall text stays sharp!)
+    if (!inRaceScene && rooms.gunPlaqueScene.visible) {
+      renderer.clearDepth();
+      renderer.render(rooms.gunPlaqueScene, camera);
+    }
 
     // Pass 4: 3D Perspective Pixel-Art Cabin + Foreground Hand/Weapon Overlay (during races)
     if (inRaceScene && activeRivals) {

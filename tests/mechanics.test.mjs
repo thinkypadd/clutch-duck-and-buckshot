@@ -423,10 +423,12 @@ import { createCabin3DRig } from '../src/cockpit3d.js';
     assert.equal(rig.projectToLayer('leftDoor', 0, 0).inBounds, true);
     assert.equal(rig.projectToLayer('windshield', 0, 0).inBounds, false);
 
-    // Looking right (+1) rotates head toward angled rightDoor plane
+    // Looking right (+1) rotates head toward angled rightDoor plane, and rearWall seals cabin back
     rig.updateCamera(1, 0, 0, 0, 0, 0);
     assert.equal(rig.projectToLayer('rightDoor', 0, 0).inBounds, true);
     assert.equal(rig.projectToLayer('windshield', 0, 0).inBounds, false);
+    assert.ok(rig.layers.rearWall, 'Rear bulkhead layer seals back of 3D cabin');
+    assert.ok(rig.layers.dash.mesh.position.y <= -0.45, 'Lowered dash leaves windshield wide open');
   } finally {
     globalThis.document = prevDoc;
   }

@@ -401,23 +401,51 @@ export function renderWallGunPlaque(canvas, gunStats, owned, statusText, isSelec
     0,
     w,
     h,
-    isSelected ? '#2a2417' : '#181c24',
-    isSelected ? '#ffb020' : owned ? '#6be36b' : '#4a5263'
+    isSelected ? '#2c2416' : '#161a22',
+    isSelected ? '#ffb020' : owned ? '#6be36b' : '#586278'
   );
-  // Pegboard hooks
-  pxRect(ctx, 28, 6, 4, 8, '#7c8494');
-  pxRect(ctx, w - 36, 6, 4, 8, '#7c8494');
+  pxOutlineRect(
+    ctx,
+    3,
+    3,
+    w - 6,
+    h - 6,
+    null,
+    isSelected ? '#ffdf85' : '#2a303d'
+  );
 
-  drawHolsteredSideProfile(ctx, 14, 6, gunStats.spec.id, gunStats.parts, 1);
+  // Top title header bar (2x bold pixel font for instant wall readability!)
+  pxRect(ctx, 4, 4, w - 8, 19, isSelected ? '#3d3018' : '#0f1218');
+  pxText(
+    ctx,
+    gunStats.spec.name.slice(0, 15),
+    w / 2,
+    8,
+    isSelected ? '#ffeb75' : '#f4efe6',
+    2,
+    'center'
+  );
 
-  pxText(ctx, gunStats.spec.name.slice(0, 16), w / 2, h - 18, '#f4efe6', 1, 'center');
+  // Pegboard grid dots & steel hooks
+  for (let py = 30; py < h - 28; py += 14) {
+    for (let px = 16; px < w - 16; px += 16) {
+      pxRect(ctx, px, py, 2, 2, '#282f3d');
+    }
+  }
+  pxRect(ctx, 56, 26, 6, 12, '#8b95a8');
+  pxRect(ctx, w - 66, 26, 6, 12, '#8b95a8');
+
+  drawHolsteredSideProfile(ctx, 32, 24, gunStats.spec.id, gunStats.parts, 2);
+
+  // Bottom status / price bar (2x bold pixel font)
+  pxRect(ctx, 4, h - 22, w - 8, 18, '#0c0e13');
   pxText(
     ctx,
     statusText,
     w / 2,
-    h - 9,
-    owned ? '#6be36b' : '#ffb020',
-    1,
+    h - 18,
+    isSelected ? '#ffeb75' : owned ? '#6be36b' : '#ffb020',
+    2,
     'center'
   );
 }

@@ -25,7 +25,7 @@ function makePixelLayer(width, height, geoW, geoH) {
 
 export function createCabin3DRig(rearMirrorTexture) {
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(60, 16 / 9, 0.08, 12.0);
+  const camera = new THREE.PerspectiveCamera(62, 16 / 9, 0.08, 12.0);
   camera.position.set(0, 0, 0);
 
   const raycaster = new THREE.Raycaster();
@@ -34,46 +34,41 @@ export function createCabin3DRig(rearMirrorTexture) {
   const localHit = new THREE.Vector3();
   const normalVec = new THREE.Vector3();
 
-  // 1. Sealed Roof & Floor Liner Planes
+  // 1. Hermetically Sealed Roof, Floor & Corner Pillar Trim (extends behind camera to z=+1.35)
   const roofMat = new THREE.MeshBasicMaterial({ color: 0x161920, side: THREE.DoubleSide });
-  const roofMesh = new THREE.Mesh(new THREE.PlaneGeometry(2.92, 2.45), roofMat);
-  roofMesh.position.set(0, 0.79, -0.3);
+  const roofMesh = new THREE.Mesh(new THREE.PlaneGeometry(3.04, 2.85), roofMat);
+  roofMesh.position.set(0, 0.8, -0.1);
   roofMesh.rotation.x = Math.PI * 0.5;
+  roofMesh.renderOrder = 1;
   scene.add(roofMesh);
 
   const floorMat = new THREE.MeshBasicMaterial({ color: 0x0d0f14, side: THREE.DoubleSide });
-  const floorMesh = new THREE.Mesh(new THREE.PlaneGeometry(2.92, 2.45), floorMat);
-  floorMesh.position.set(0, -0.78, -0.3);
+  const floorMesh = new THREE.Mesh(new THREE.PlaneGeometry(3.04, 2.85), floorMat);
+  floorMesh.position.set(0, -0.8, -0.1);
   floorMesh.rotation.x = -Math.PI * 0.5;
+  floorMesh.renderOrder = 1;
   scene.add(floorMesh);
 
-  // 2. Exterior Hood & Protruding Engine Intake Plane (furthest forward, sloped horizontally)
-  const hood = makePixelLayer(360, 110, 3.1, 0.95);
-  hood.mesh.position.set(0, -0.31, -1.88);
-  hood.mesh.rotation.x = -0.32;
+  const pillarSealMat = new THREE.MeshBasicMaterial({ color: 0x1a1e26, side: THREE.DoubleSide });
+  for (const sx of [-1, 1]) {
+    // Seal front A-pillar corners & rear C-pillar corners
+    const frontSeal = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.66, 0.12), pillarSealMat);
+    frontSeal.position.set(sx * 1.41, 0, -1.36);
+    frontSeal.renderOrder = 2;
+    const rearSeal = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.66, 0.14), pillarSealMat);
+    rearSeal.position.set(sx * 1.41, 0, 1.16);
+    rearSeal.renderOrder = 2;
+    scene.add(frontSeal, rearSeal);
+  }
+
+  // 2. Exterior Hood & Protruding Engine Intake Plane (lowered so windshield stays wide open!)
+  const hood = makePixelLayer(360, 110, 3.05, 0.78);
+  hood.mesh.position.set(0, -0.64, -1.88);
+  hood.mesh.rotation.x = -0.24;
   hood.mesh.renderOrder = 1;
   scene.add(hood.mesh);
 
-  // 3. Left & Right 3D Perspective Side Doors (angled along +/-X so head rotation faces them!)
-  const leftDoor = makePixelLayer(384, 256, 2.24, 1.54);
-  leftDoor.mesh.position.set(-1.38, -0.01, -0.28);
-  leftDoor.mesh.rotation.y = Math.PI * 0.485;
-  leftDoor.mesh.renderOrder = 2;
-  scene.add(leftDoor.mesh);
-
-  const rightDoor = makePixelLayer(384, 256, 2.24, 1.54);
-  rightDoor.mesh.position.set(1.38, -0.01, -0.28);
-  rightDoor.mesh.rotation.y = -Math.PI * 0.485;
-  rightDoor.mesh.renderOrder = 2;
-  scene.add(rightDoor.mesh);
-
-  // 4. Forward Windshield, A-Pillars, Overhead Trunk Switch, Rearview Bezel & Sun Visor
-  const windshield = makePixelLayer(480, 270, 2.84, 1.6);
-  windshield.mesh.position.set(0, 0, -1.35);
-  windshield.mesh.renderOrder = 3;
-  scene.add(windshield.mesh);
-
-  // 4B. Live 3D PSX Rearview Mirror Quad (aligned inside windshield bezel x=146..254, y=24..58)
+  // 3. Live 3D PSX Mirrors (rendered at order 1.5 just behind door/windshield bezel cutouts)
   const mirrorMat = new THREE.ShaderMaterial({
     uniforms: {
       tRear: { value: rearMirrorTexture },
@@ -99,33 +94,60 @@ export function createCabin3DRig(rearMirrorTexture) {
     depthTest: true,
     depthWrite: false,
   });
-  const mirrorMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.639, 0.2015), mirrorMat);
-  mirrorMesh.position.set(-0.2367, 0.557, -1.345);
-  mirrorMesh.renderOrder = 4;
+
+  // Matches windshield MIRROR_CUTOUT (x=150..250, y=17..41 on 480x270 -> geo 2.88x1.62 at z=-1.35)
+  const mirrorMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.16), mirrorMat);
+  mirrorMesh.position.set(-0.24, 0.636, -1.355);
+  mirrorMesh.renderOrder = 2;
   scene.add(mirrorMesh);
 
-  // Also mount a small live Rear-Left Driver Exterior Side Mirror glass on leftDoor!
-  const sideMirrorMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.24, 0.14), mirrorMat);
-  sideMirrorMesh.position.set(-1.31, -0.05, -1.16);
-  sideMirrorMesh.rotation.y = Math.PI * 0.36;
-  sideMirrorMesh.renderOrder = 4;
+  // Matches leftDoor exterior side-mirror cutout (x=307..355, y=139..167 on 384x256)
+  const sideMirrorMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.35, 0.195), mirrorMat);
+  sideMirrorMesh.position.set(-1.425, -0.158, -1.027);
+  sideMirrorMesh.rotation.y = Math.PI * 0.5;
+  sideMirrorMesh.renderOrder = 1;
   scene.add(sideMirrorMesh);
 
-  // 5. Sloped Dashboard, Binnacle, Dynamic 3..8 H-Shifter, Gimmick & Passenger N2O Bottle
-  const dash = makePixelLayer(480, 140, 2.5, 0.73);
-  dash.mesh.position.set(0, -0.345, -1.18);
-  dash.mesh.rotation.x = -0.12;
+  // 4. Left, Right & Rear Cabin Bulkhead Planes (fully encloses 360 degrees!)
+  const leftDoor = makePixelLayer(384, 256, 2.56, 1.62);
+  leftDoor.mesh.position.set(-1.41, 0, -0.1);
+  leftDoor.mesh.rotation.y = Math.PI * 0.5;
+  leftDoor.mesh.renderOrder = 2;
+  scene.add(leftDoor.mesh);
+
+  const rightDoor = makePixelLayer(384, 256, 2.56, 1.62);
+  rightDoor.mesh.position.set(1.41, 0, -0.1);
+  rightDoor.mesh.rotation.y = -Math.PI * 0.5;
+  rightDoor.mesh.renderOrder = 2;
+  scene.add(rightDoor.mesh);
+
+  const rearWall = makePixelLayer(384, 256, 2.88, 1.62);
+  rearWall.mesh.position.set(0, 0, 1.16);
+  rearWall.mesh.rotation.y = Math.PI;
+  rearWall.mesh.renderOrder = 2;
+  scene.add(rearWall.mesh);
+
+  // 5. Forward Windshield, A-Pillars, Compact Overhead Trunk Switch, Rearview Bezel & Sun Visor
+  const windshield = makePixelLayer(480, 270, 2.88, 1.62);
+  windshield.mesh.position.set(0, 0, -1.35);
+  windshield.mesh.renderOrder = 3;
+  scene.add(windshield.mesh);
+
+  // 6. Compact Lower Dashboard (~30% bottom height so ~68% of windshield stays clear!)
+  const dash = makePixelLayer(480, 140, 2.48, 0.48);
+  dash.mesh.position.set(0, -0.47, -1.16);
+  dash.mesh.rotation.x = -0.08;
   dash.mesh.renderOrder = 5;
   scene.add(dash.mesh);
 
-  // 6. Foreground Steering Wheel & Short-Throw Nitro Pull-Handle (closest depth layer!)
-  const wheelPull = makePixelLayer(480, 140, 2.14, 0.625);
-  wheelPull.mesh.position.set(0, -0.32, -1.0);
-  wheelPull.mesh.rotation.x = -0.08;
+  // 7. Foreground Steering Wheel & Short-Throw Nitro Pull-Handle (tucked low in bottom ~30%)
+  const wheelPull = makePixelLayer(480, 140, 2.14, 0.43);
+  wheelPull.mesh.position.set(0, -0.4, -1.0);
+  wheelPull.mesh.rotation.x = -0.05;
   wheelPull.mesh.renderOrder = 6;
   scene.add(wheelPull.mesh);
 
-  const layers = { hood, leftDoor, rightDoor, windshield, dash, wheelPull };
+  const layers = { hood, leftDoor, rightDoor, rearWall, windshield, dash, wheelPull };
 
   function updateCamera(viewYaw, panX, panY, smoothRoll, shakeX, shakeY) {
     camera.position.set(shakeX * 0.0022, -shakeY * 0.0022, 0);
@@ -170,6 +192,7 @@ export function createCabin3DRig(rearMirrorTexture) {
     hood.tex.needsUpdate = true;
     leftDoor.tex.needsUpdate = true;
     rightDoor.tex.needsUpdate = true;
+    rearWall.tex.needsUpdate = true;
     windshield.tex.needsUpdate = true;
     dash.tex.needsUpdate = true;
     wheelPull.tex.needsUpdate = true;

@@ -52,10 +52,10 @@ export const COCKPIT_H = 270;
 
 // Plane-local coordinates:
 // 1. Windshield Plane (480 x 270)
-const TRUNK_BTN = { x: 56, y: 21, w: 80, h: 36 };
-const MIRROR_BEZEL = { x: 142, y: 20, w: 116, h: 42 };
-const MIRROR_CUTOUT = { x: 146, y: 24, w: 108, h: 34 };
-const VISOR_ORIGIN = { x: 266, y: 16 };
+const TRUNK_BTN = { x: 56, y: 15, w: 82, h: 29 };
+const MIRROR_BEZEL = { x: 146, y: 14, w: 108, h: 30 };
+const MIRROR_CUTOUT = { x: 150, y: 17, w: 100, h: 24 };
+const VISOR_ORIGIN = { x: 266, y: 11 };
 
 // 2. Dash Plane (480 x 140)
 const SHIFTER_BOX = { x: 208, y: 50, w: 92, h: 78 };
@@ -63,8 +63,8 @@ const GIMMICK_BTN = { x: 208, y: 20, w: 92, h: 25 };
 const DRIFT_LEVER = { x: 184, y: 34, w: 19, h: 68 };
 
 // 3. Foreground Wheel & Pull-Handle Plane (480 x 140)
-const WHEEL_HUB = { x: 114, y: 78, rOuter: 52, rInner: 39 };
-const NITRO_TRACK = { x: 350, yTop: 36, yBot: 74, handleW: 54, handleH: 18 };
+const WHEEL_HUB = { x: 114, y: 84, rOuter: 48, rInner: 36 };
+const NITRO_TRACK = { x: 350, yTop: 38, yBot: 78, handleW: 54, handleH: 18 };
 
 export function getHGateLayout(maxGears = 3, box = SHIFTER_BOX) {
   const n = Math.max(3, Math.min(8, maxGears));
@@ -143,7 +143,9 @@ export function drawHGatePreviewCanvas(canvas, maxGears = 5, transTier = 0) {
   }
   const p1 = layout.pockets[0];
   const knobCol = transTier >= 3 ? '#e8b944' : transTier >= 1 ? '#d63629' : '#3a4252';
-  pxFillCircle(ctx, p1.x, p1.y, 4, knobCol);
+  pxFillCircle(ctx, p1.x, p1.y, 3, '#101216');
+  pxLine(ctx, p1.x, p1.y, p1.x - 2, p1.y - 8, '#adb8cc', 2);
+  pxFillCircle(ctx, p1.x - 2, p1.y - 8, 4, knobCol);
 }
 
 export function createCockpitController(overlayCanvas, cabin3D, sound, callbacks) {
@@ -166,6 +168,7 @@ export function createCockpitController(overlayCanvas, cabin3D, sound, callbacks
   let activeHold = null;
   let wheelGrabPrevAngle = 0;
   let shifterKnobPos = { x: 224, y: 66 };
+  let shifterGrabOffset = { x: 0, y: 0 };
   let dragIndex = -1;
   let dragOrigin = { x: 0, y: 0 };
 
@@ -641,16 +644,45 @@ export function createCockpitController(overlayCanvas, cabin3D, sound, callbacks
         }
       }
 
-      if (inRect(dashPt.x, dashPt.y, SHIFTER_BOX, 6)) {
+      const shifterHitBox = {
+        x: SHIFTER_BOX.x - 4,
+        y: SHIFTER_BOX.y - 10,
+        w: SHIFTER_BOX.w + 8,
+        h: SHIFTER_BOX.h + 14,
+      };
+      if (inRect(dashPt.x, dashPt.y, shifterHitBox, 2)) {
         activeHold = 'shifter';
-        updateShifterFromPoint(dashPt.x, dashPt.y, car, carStats);
+        const layout = getHGateLayout(carStats.maxGears, SHIFTER_BOX);
+        const curPocket = layout.pockets.find((p) => p.gear === car.gear);
+        const curBaseX = curPocket?.x ?? layout.colXs[0];
+        const curBaseY = curPocket?.y ?? layout.yMid;
+        const curKnobX =
+          curBaseX - 3 + (curBaseX - (SHIFTER_BOX.x + SHIFTER_BOX.w * 0.5)) * 0.16;
+        const curKnobY = curBaseY - 12;
+
+        if (Math.hypot(dashPt.x - curKnobX, dashPt.y - curKnobY) <= 13) {
+          shifterGrabOffset.x = curBaseX - dashPt.x;
+          shifterGrabOffset.y = curBaseY - dashPt.y;
+          shifterKnobPos.x = curBaseX;
+          shifterKnobPos.y = curBaseY;
+        } else {
+          shifterGrabOffset.x = 0;
+          shifterGrabOffset.y = 0;
+          updateShifterFromPoint(dashPt.x, dashPt.y, car, carStats);
+        }
       }
     }
   }
 
   function updateShifterFromPoint(dx, dy, car, carStats) {
-    shifterKnobPos.x = Math.max(SHIFTER_BOX.x + 8, Math.min(SHIFTER_BOX.x + SHIFTER_BOX.w - 8, dx));
-    shifterKnobPos.y = Math.max(SHIFTER_BOX.y + 8, Math.min(SHIFTER_BOX.y + SHIFTER_BOX.h - 8, dy));
+    shifterKnobPos.x = Math.max(
+      SHIFTER_BOX.x + 8,
+      Math.min(SHIFTER_BOX.x + SHIFTER_BOX.w - 8, dx + shifterGrabOffset.x)
+    );
+    shifterKnobPos.y = Math.max(
+      SHIFTER_BOX.y + 8,
+      Math.min(SHIFTER_BOX.y + SHIFTER_BOX.h - 8, dy + shifterGrabOffset.y)
+    );
 
     const layout = getHGateLayout(carStats.maxGears, SHIFTER_BOX);
     const snapRadius = 10.5 + (carStats.parts.trans || 0) * 2.2;
@@ -934,6 +966,7 @@ export function createCockpitController(overlayCanvas, cabin3D, sound, callbacks
   function paintSideDoors(carStats) {
     const armorTier = carStats.parts.armor || 0;
     const { leftDoor, rightDoor } = cabin3D.layers;
+    const doorCardY = 178;
 
     // Left Driver Door (u=1 / x=width is FRONT A-pillar & Side Mirror; u=0 / x=0 is REAR B-pillar)
     {
@@ -942,33 +975,34 @@ export function createCockpitController(overlayCanvas, cabin3D, sound, callbacks
       const h = leftDoor.height;
       ctx.clearRect(0, 0, w, h);
 
-      // Top roof rail + rear B-pillar + front A-pillar edge
-      pxRect(ctx, 0, 0, w, 24, '#181b22');
-      pxRect(ctx, 0, 0, 34, h, '#191c24');
-      pxRect(ctx, w - 18, 0, 18, h, '#1e222b');
+      // Top roof rail + wide rear B-pillar + front A-pillar edge
+      pxRect(ctx, 0, 0, w, 18, '#181b22');
+      pxRect(ctx, 0, 0, 48, h, '#191c24');
+      pxRect(ctx, 46, 18, 3, doorCardY - 18, '#2d3340');
+      pxRect(ctx, w - 20, 0, 20, h, '#1e222b');
 
-      // Lower driver door card & armrest
-      pxOutlineRect(ctx, 0, 152, w, h - 152, '#1b1e26', '#353b47');
-      pxOutlineRect(ctx, 44, 174, w - 92, 24, '#272c38', '#111317');
-      pxOutlineRect(ctx, w - 82, 166, 24, 10, '#7c8496', '#111317'); // Door latch
-      pxText(ctx, 'DRIVER WINDOW', w / 2, 160, '#8d97ad', 1, 'center');
+      // Lower driver door card & armrest (tucked low so side window is tall!)
+      pxOutlineRect(ctx, 0, doorCardY, w, h - doorCardY, '#1b1e26', '#353b47');
+      pxOutlineRect(ctx, 56, doorCardY + 18, w - 104, 22, '#272c38', '#111317');
+      pxOutlineRect(ctx, w - 82, doorCardY + 10, 24, 10, '#7c8496', '#111317');
+      pxText(ctx, 'DRIVER WINDOW', w / 2 + 8, doorCardY + 6, '#8d97ad', 1, 'center');
 
-      // Exterior Driver Side-View Mirror housing (cutout reveals live 3D sideMirrorMesh!)
-      pxOutlineRect(ctx, w - 74, 106, 56, 38, '#232833', '#0e1014');
-      ctx.clearRect(w - 69, 111, 46, 28);
-      pxOutlineRect(ctx, w - 70, 110, 48, 30, null, '#8b97ad');
+      // Exterior Driver Side-View Mirror housing (cutout x=307..355, y=139..167 reveals sideMirrorMesh!)
+      pxOutlineRect(ctx, w - 82, 134, 58, 38, '#232833', '#0e1014');
+      ctx.clearRect(w - 77, 139, 48, 28);
+      pxOutlineRect(ctx, w - 78, 138, 50, 30, null, '#8b97ad');
 
       if (armorTier >= 1) {
-        pxLine(ctx, 36, 22, w - 18, 22, '#7c879c', 5);
-        pxLine(ctx, 36, 22, 36, 152, '#7c879c', 6);
+        pxLine(ctx, 48, 18, w - 20, 18, '#7c879c', 5);
+        pxLine(ctx, 48, 18, 48, doorCardY, '#7c879c', 6);
       }
       if (armorTier >= 2) {
-        pxOutlineRect(ctx, 20, 154, w - 40, 20, '#3c4352', '#15181e');
-        for (let rx = 30; rx < w - 30; rx += 24) pxRect(ctx, rx, 162, 3, 3, '#aebad1');
+        pxOutlineRect(ctx, 20, doorCardY + 2, w - 40, 18, '#3c4352', '#15181e');
+        for (let rx = 30; rx < w - 30; rx += 24) pxRect(ctx, rx, doorCardY + 9, 3, 3, '#aebad1');
       }
       if (armorTier >= 3) {
-        pxOutlineRect(ctx, 34, 24, w - 52, 14, '#3c4352', '#15181e');
-        pxOutlineRect(ctx, 34, 62, w - 52, 10, '#3c4352', '#15181e');
+        pxOutlineRect(ctx, 48, 20, w - 68, 12, '#3c4352', '#15181e');
+        pxOutlineRect(ctx, 48, 54, w - 68, 9, '#3c4352', '#15181e');
       }
 
       for (const cr of bulletCracks) {
@@ -983,30 +1017,69 @@ export function createCockpitController(overlayCanvas, cabin3D, sound, callbacks
       const h = rightDoor.height;
       ctx.clearRect(0, 0, w, h);
 
-      pxRect(ctx, 0, 0, w, 24, '#181b22');
-      pxRect(ctx, 0, 0, 18, h, '#1e222b');
-      pxRect(ctx, w - 34, 0, 34, h, '#191c24');
+      pxRect(ctx, 0, 0, w, 18, '#181b22');
+      pxRect(ctx, 0, 0, 20, h, '#1e222b');
+      pxRect(ctx, w - 48, 0, 48, h, '#191c24');
+      pxRect(ctx, w - 49, 18, 3, doorCardY - 18, '#2d3340');
 
-      pxOutlineRect(ctx, 0, 152, w, h - 152, '#1b1e26', '#353b47');
-      pxOutlineRect(ctx, 48, 174, w - 92, 24, '#272c38', '#111317');
-      pxText(ctx, 'PASSENGER WINDOW', w / 2, 160, '#8d97ad', 1, 'center');
+      pxOutlineRect(ctx, 0, doorCardY, w, h - doorCardY, '#1b1e26', '#353b47');
+      pxOutlineRect(ctx, 48, doorCardY + 18, w - 104, 22, '#272c38', '#111317');
+      pxText(ctx, 'PASSENGER WINDOW', w / 2 - 8, doorCardY + 6, '#8d97ad', 1, 'center');
 
       if (armorTier >= 1) {
-        pxLine(ctx, 18, 22, w - 36, 22, '#7c879c', 5);
-        pxLine(ctx, w - 36, 22, w - 36, 152, '#7c879c', 6);
+        pxLine(ctx, 20, 18, w - 48, 18, '#7c879c', 5);
+        pxLine(ctx, w - 48, 18, w - 48, doorCardY, '#7c879c', 6);
       }
       if (armorTier >= 2) {
-        pxOutlineRect(ctx, 20, 154, w - 40, 20, '#3c4352', '#15181e');
-        for (let rx = 30; rx < w - 30; rx += 24) pxRect(ctx, rx, 162, 3, 3, '#aebad1');
+        pxOutlineRect(ctx, 20, doorCardY + 2, w - 40, 18, '#3c4352', '#15181e');
+        for (let rx = 30; rx < w - 30; rx += 24) pxRect(ctx, rx, doorCardY + 9, 3, 3, '#aebad1');
       }
       if (armorTier >= 3) {
-        pxOutlineRect(ctx, 18, 24, w - 52, 14, '#3c4352', '#15181e');
-        pxOutlineRect(ctx, 18, 62, w - 52, 10, '#3c4352', '#15181e');
+        pxOutlineRect(ctx, 20, 20, w - 68, 12, '#3c4352', '#15181e');
+        pxOutlineRect(ctx, 20, 54, w - 68, 9, '#3c4352', '#15181e');
       }
 
       for (const cr of bulletCracks) {
         if (cr.side === 'right') drawBulletSpiderweb(ctx, cr.x, cr.y, cr.seed);
       }
+    }
+  }
+
+  function paintRearBulkhead(carStats) {
+    const rearLayer = cabin3D.layers.rearWall;
+    if (!rearLayer) return;
+    const { ctx, width: w, height: h } = rearLayer;
+    const armorTier = carStats.parts.armor || 0;
+
+    // Fully opaque rear cabin interior (C-pillars, rear parcel deck, tinted rear glass & bucket seats)
+    pxRect(ctx, 0, 0, w, h, '#14171f');
+    pxRect(ctx, 0, 0, w, 24, '#181b22');
+    pxRect(ctx, 0, 0, 56, h, '#191c24');
+    pxRect(ctx, w - 56, 0, 56, h, '#191c24');
+
+    // Tinted rear glass slit (with defroster lines)
+    pxOutlineRect(ctx, 56, 26, w - 112, 86, '#1c2430', '#2f3645');
+    for (let dy = 38; dy < 106; dy += 14) {
+      pxLine(ctx, 60, dy, w - 60, dy, 'rgba(212, 155, 53, 0.22)', 1);
+    }
+
+    if (armorTier >= 1) {
+      // Rear X-brace rollcage bar across rear bulkhead
+      pxLine(ctx, 58, 28, w - 58, 110, '#687285', 6);
+      pxLine(ctx, w - 58, 28, 58, 110, '#687285', 6);
+    }
+
+    // Rear parcel shelf & trunk firewall
+    pxOutlineRect(ctx, 0, 112, w, h - 112, '#181b22', '#2f3542');
+
+    // Driver & Passenger Racing Bucket Seatbacks + Headrests
+    for (const sx of [96, w - 96]) {
+      pxOutlineRect(ctx, sx - 44, 116, 88, h - 116, '#202530', '#0e1015');
+      pxOutlineRect(ctx, sx - 30, 124, 60, h - 128, '#282e3b', '#14171e');
+      // Headrest + harness pass-through slots
+      pxOutlineRect(ctx, sx - 24, 72, 48, 48, '#232834', '#0e1015');
+      pxRect(ctx, sx - 16, 102, 11, 8, '#0c0e12');
+      pxRect(ctx, sx + 5, 102, 11, 8, '#0c0e12');
     }
   }
 
@@ -1029,40 +1102,40 @@ export function createCockpitController(overlayCanvas, cabin3D, sound, callbacks
     const wep = getActiveWeapon(loadout);
     const gunEquipped = wep.mode === 'EQUIPPED';
 
-    // Top roof header & angled A-pillars
-    pxRect(ctx, 0, 0, width, 19, '#181a20');
-    pxRect(ctx, 0, 18, width, 3, '#2d323d');
+    // Compact Top Roof Header & Slim Angled A-Pillars (leaves ~68% windshield clear!)
+    pxRect(ctx, 0, 0, width, 13, '#181a20');
+    pxRect(ctx, 0, 12, width, 2, '#2d323d');
 
     pxPoly(
       ctx,
       [
-        [0, 18],
-        [30, 18],
-        [18, 185],
-        [0, 185],
+        [0, 12],
+        [24, 12],
+        [14, 215],
+        [0, 215],
       ],
       '#1e222b'
     );
     pxPoly(
       ctx,
       [
-        [width - 30, 18],
-        [width, 18],
-        [width, 185],
-        [width - 18, 185],
+        [width - 24, 12],
+        [width, 12],
+        [width, 215],
+        [width - 14, 215],
       ],
       '#1e222b'
     );
 
     if (armorTier >= 1) {
-      pxLine(ctx, 30, 20, 18, 174, '#7c879c', 6);
-      pxLine(ctx, width - 30, 20, width - 18, 174, '#7c879c', 6);
-      pxRect(ctx, 28, 18, width - 56, 5, '#687285');
+      pxLine(ctx, 24, 14, 14, 206, '#7c879c', 5);
+      pxLine(ctx, width - 24, 14, width - 14, 206, '#7c879c', 5);
+      pxRect(ctx, 22, 12, width - 44, 4, '#687285');
     }
     if (armorTier >= 3) {
-      pxOutlineRect(ctx, 26, 86, width - 52, 9, '#3c4352', '#15181e');
-      for (let rx = 38; rx < width - 38; rx += 32) {
-        pxRect(ctx, rx, 89, 3, 3, '#9aa6bd');
+      pxOutlineRect(ctx, 22, 74, width - 44, 8, '#3c4352', '#15181e');
+      for (let rx = 34; rx < width - 34; rx += 32) {
+        pxRect(ctx, rx, 77, 3, 3, '#9aa6bd');
       }
     }
 
@@ -1070,20 +1143,20 @@ export function createCockpitController(overlayCanvas, cabin3D, sound, callbacks
       if (cr.side === 'front') drawBulletSpiderweb(ctx, cr.x, cr.y, cr.seed);
     }
 
-    // Top Rally Trip Bar (leaves top-left 0..52 free for corner settings cog!)
-    pxOutlineRect(ctx, 56, 2, 198, 15, '#0e1014', '#4d5463');
-    pxText(ctx, `POS ${formatOrdinal(rank)}/${totalRacers}`, 61, 6, '#ffb020', 1);
+    // Compact Top Rally Trip Bar (leaves top-left 0..52 free for corner settings cog!)
+    pxOutlineRect(ctx, 56, 1, 198, 12, '#0e1014', '#4d5463');
+    pxText(ctx, `POS ${formatOrdinal(rank)}/${totalRacers}`, 61, 4, '#ffb020', 1);
     const dispLap = Math.max(1, Math.min(totalLaps, car.lap || 1));
-    pxText(ctx, `LAP ${dispLap}/${totalLaps}`, 132, 6, '#f4efe6', 1);
-    pxText(ctx, `FOES:${aliveRivals}`, 249, 6, '#6be36b', 1, 'right');
+    pxText(ctx, `LAP ${dispLap}/${totalLaps}`, 132, 4, '#f4efe6', 1);
+    pxText(ctx, `FOES:${aliveRivals}`, 249, 4, '#6be36b', 1, 'right');
 
-    // Overhead Trunk Countermeasure Switch (x: 56..136, y: 21..57) right beside Rearview Mirror!
+    // Compact Overhead Trunk Countermeasure Switch beside Rearview Mirror
     const trunkType = carStats.trunkType;
     const trunkHover = !gunEquipped && windPt && inRect(windPt.x, windPt.y, TRUNK_BTN, 2);
     if (trunkType === 'none') {
       pxOutlineRect(ctx, TRUNK_BTN.x, TRUNK_BTN.y, TRUNK_BTN.w, TRUNK_BTN.h, '#14171d', '#39404f');
-      pxText(ctx, 'TRUNK BAY', TRUNK_BTN.x + 40, TRUNK_BTN.y + 9, '#7d879c', 1, 'center');
-      pxText(ctx, 'EMPTY', TRUNK_BTN.x + 40, TRUNK_BTN.y + 21, '#586175', 1, 'center');
+      pxText(ctx, 'TRUNK BAY', TRUNK_BTN.x + 41, TRUNK_BTN.y + 6, '#7d879c', 1, 'center');
+      pxText(ctx, 'EMPTY', TRUNK_BTN.x + 41, TRUNK_BTN.y + 17, '#586175', 1, 'center');
     } else {
       const ready = car.trunkCooldown <= 0;
       const labels = {
@@ -1112,8 +1185,8 @@ export function createCockpitController(overlayCanvas, cabin3D, sound, callbacks
       pxText(
         ctx,
         labels[trunkType] || 'DEPLOY',
-        TRUNK_BTN.x + 40,
-        TRUNK_BTN.y + 6,
+        TRUNK_BTN.x + 41,
+        TRUNK_BTN.y + 4,
         ready ? '#ffeb75' : '#cbc1ab',
         1,
         'center'
@@ -1121,22 +1194,22 @@ export function createCockpitController(overlayCanvas, cabin3D, sound, callbacks
       const frac = ready
         ? 1
         : Math.max(0, 1 - car.trunkCooldown / Math.max(0.1, car.trunkMaxCooldown));
-      pxOutlineRect(ctx, TRUNK_BTN.x + 6, TRUNK_BTN.y + 19, TRUNK_BTN.w - 12, 11, '#0b0d10', '#485061');
+      pxOutlineRect(ctx, TRUNK_BTN.x + 6, TRUNK_BTN.y + 14, TRUNK_BTN.w - 12, 10, '#0b0d10', '#485061');
       pxRect(
         ctx,
         TRUNK_BTN.x + 8,
-        TRUNK_BTN.y + 21,
+        TRUNK_BTN.y + 16,
         Math.round(frac * (TRUNK_BTN.w - 16)),
-        7,
+        6,
         ready ? '#3bd156' : '#ffb020'
       );
       if (ready) {
-        pxText(ctx, 'ARMED', TRUNK_BTN.x + 40, TRUNK_BTN.y + 22, '#0b0d10', 1, 'center');
+        pxText(ctx, 'ARMED', TRUNK_BTN.x + 41, TRUNK_BTN.y + 16, '#0b0d10', 1, 'center');
       }
     }
 
     // Live 3D Rearview Mirror Bezel & Roof Mounting Stalk (cutout reveals 3D mirrorMesh!)
-    pxRect(ctx, 196, 14, 8, 8, '#2d3340');
+    pxRect(ctx, 196, 10, 8, 6, '#2d3340');
     const mirBorder = tailgaterClose && pulse ? '#ff5242' : '#586275';
     pxOutlineRect(
       ctx,
@@ -1158,8 +1231,8 @@ export function createCockpitController(overlayCanvas, cabin3D, sound, callbacks
       '#0b0d10'
     );
     if (tailgaterClose) {
-      pxOutlineRect(ctx, MIRROR_BEZEL.x + 28, MIRROR_BEZEL.y + 39, 60, 10, '#3d1412', '#ff5242');
-      pxText(ctx, 'TAILGATER!', MIRROR_BEZEL.x + 58, MIRROR_BEZEL.y + 42, '#ffeb75', 1, 'center');
+      pxOutlineRect(ctx, MIRROR_BEZEL.x + 24, MIRROR_BEZEL.y + 28, 60, 10, '#3d1412', '#ff5242');
+      pxText(ctx, 'TAILGATER!', MIRROR_BEZEL.x + 54, MIRROR_BEZEL.y + 31, '#ffeb75', 1, 'center');
     }
 
     // Passenger Sun Visor Weapon Holster & Tactile Reload Station
@@ -1442,12 +1515,34 @@ export function createCockpitController(overlayCanvas, cabin3D, sound, callbacks
       );
     }
 
+    // Entire stick + rubber shift boot slides THROUGH the H-gate slot into each gear!
     const curPocket = layout.pockets.find((p) => p.gear === car.gear);
-    const kx = activeHold === 'shifter' ? shifterKnobPos.x : curPocket?.x ?? layout.colXs[0];
-    const ky = activeHold === 'shifter' ? shifterKnobPos.y : curPocket?.y ?? layout.yMid;
-    pxLine(ctx, SHIFTER_BOX.x + SHIFTER_BOX.w / 2, layout.yMid + 4, kx, ky, '#9aa4b8', 3);
+    const stickBaseX = activeHold === 'shifter' ? shifterKnobPos.x : curPocket?.x ?? layout.colXs[0];
+    const stickBaseY = activeHold === 'shifter' ? shifterKnobPos.y : curPocket?.y ?? layout.yMid;
+    const knobX = Math.round(
+      stickBaseX - 3 + (stickBaseX - (SHIFTER_BOX.x + SHIFTER_BOX.w * 0.5)) * 0.16
+    );
+    const knobY = Math.round(stickBaseY - 12);
 
-    const hoverKnob = !gunEquipped && inRect(dpx, dpy, SHIFTER_BOX, 4);
+    // Rubber shift-boot collar seated directly in the active slot channel
+    pxFillCircle(ctx, stickBaseX, stickBaseY, 4, '#181c24');
+    pxFillCircle(ctx, stickBaseX, stickBaseY, 2, '#343b49');
+
+    // Rigid chrome/titanium shaft rising from the slot up to the shift knob
+    pxLine(ctx, stickBaseX, stickBaseY, knobX, knobY, '#14171e', 5);
+    pxLine(
+      ctx,
+      stickBaseX,
+      stickBaseY,
+      knobX,
+      knobY,
+      transTier >= 3 ? '#f0ca62' : '#c7d2e6',
+      3
+    );
+
+    const hoverKnob =
+      !gunEquipped &&
+      (Math.hypot(dpx - knobX, dpy - knobY) <= 12 || inRect(dpx, dpy, SHIFTER_BOX, 4));
     const knobCol =
       transTier >= 3
         ? '#e8b944'
@@ -1456,9 +1551,15 @@ export function createCockpitController(overlayCanvas, cabin3D, sound, callbacks
         : transTier === 1
         ? '#d63629'
         : '#2d3340';
-    pxFillCircle(ctx, kx, ky, 7, activeHold === 'shifter' || hoverKnob ? '#ffeb75' : '#0e1014');
-    pxFillCircle(ctx, kx, ky, 5, knobCol);
-    pxFillCircle(ctx, kx - 1, ky - 2, 2, '#ffffff');
+    pxFillCircle(
+      ctx,
+      knobX,
+      knobY,
+      7,
+      activeHold === 'shifter' || hoverKnob ? '#ffeb75' : '#0e1014'
+    );
+    pxFillCircle(ctx, knobX, knobY, 5, knobCol);
+    pxFillCircle(ctx, knobX - 1, knobY - 2, 2, '#ffffff');
 
     // Status ticker banner when car uses GIMMICK_BTN for an active switch
     if (statusBanner.timer > 0 && gType !== 'dual_gun') {
@@ -1730,9 +1831,10 @@ export function createCockpitController(overlayCanvas, cabin3D, sound, callbacks
     const pulse = Math.floor(animTime * 5.8) % 2 === 0;
     const hits = getLayerHits(pointer.ndcX, pointer.ndcY);
 
-    // 2. Paint all 6 modular 3D cabin canvases & upload textures
+    // 2. Paint all 7 modular 3D cabin canvases & upload textures
     paintHoodLayer(car, carStats);
     paintSideDoors(carStats);
+    paintRearBulkhead(carStats);
     paintWindshieldLayer(
       car,
       loadout,

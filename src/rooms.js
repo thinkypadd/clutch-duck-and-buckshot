@@ -391,26 +391,28 @@ export function createHubRooms(scene, camera, textures) {
   }
 
   // =========================================================================
-  // 5. 3D GUN SHOP ARMORY (Pegboard Wall with All 8 Pixel Gun Plaques + Raycast)
+  // 5. 3D GUN SHOP ARMORY (Pegboard Wall + Crisp Pixel Plaque Scene)
   // =========================================================================
   const gunshopGroup = new THREE.Group();
   root.add(gunshopGroup);
+  const gunPlaqueScene = new THREE.Scene();
+  gunPlaqueScene.visible = false;
   const gunPlaques = [];
   const gunPickMeshes = [];
   {
     const floorGeo = new THREE.PlaneGeometry(24, 20, 6, 6).rotateX(-Math.PI / 2);
     gunshopGroup.add(new THREE.Mesh(floorGeo, woodMat));
 
-    const pegWall = new THREE.Mesh(new THREE.BoxGeometry(13.5, 6.2, 0.45), brickMat);
-    pegWall.position.set(0, 3.1, -3.5);
-    const pegBacking = new THREE.Mesh(new THREE.BoxGeometry(10.4, 3.6, 0.14), wallDarkMat);
-    pegBacking.position.set(0, 2.35, -3.22);
-    const counter = new THREE.Mesh(new THREE.BoxGeometry(9.6, 0.96, 1.25), woodMat);
-    counter.position.set(0, 0.48, -1.65);
+    const pegWall = new THREE.Mesh(new THREE.BoxGeometry(13.5, 6.4, 0.45), brickMat);
+    pegWall.position.set(0, 3.2, -3.5);
+    const pegBacking = new THREE.Mesh(new THREE.BoxGeometry(10.8, 3.9, 0.14), wallDarkMat);
+    pegBacking.position.set(0, 2.44, -3.22);
+    const counter = new THREE.Mesh(new THREE.BoxGeometry(9.6, 0.92, 1.25), woodMat);
+    counter.position.set(0, 0.46, -1.65);
     const counterTop = new THREE.Mesh(new THREE.BoxGeometry(9.8, 0.1, 1.38), steelMat);
-    counterTop.position.set(0, 0.98, -1.65);
-    const armoryLight = new THREE.Mesh(new THREE.BoxGeometry(8.8, 0.18, 0.45), lampWarmMat);
-    armoryLight.position.set(0, 4.35, -2.1);
+    counterTop.position.set(0, 0.94, -1.65);
+    const armoryLight = new THREE.Mesh(new THREE.BoxGeometry(9.2, 0.18, 0.45), lampWarmMat);
+    armoryLight.position.set(0, 4.5, -2.1);
     gunshopGroup.add(pegWall, pegBacking, counter, counterTop, armoryLight);
 
     // Ammo crates on sides
@@ -419,7 +421,7 @@ export function createHubRooms(scene, camera, textures) {
         new THREE.BoxGeometry(1.3, 0.85, 0.95),
         createPsxMaterial({ color: 0x455437 })
       );
-      crate.position.set(side * 4.4, 0.42, -2.5);
+      crate.position.set(side * 4.55, 0.42, -2.5);
       gunshopGroup.add(crate);
     }
 
@@ -427,27 +429,28 @@ export function createHubRooms(scene, camera, textures) {
     gunIds.forEach((gid, idx) => {
       const col = idx % 4;
       const row = Math.floor(idx / 4);
-      const px = (col - 1.5) * 2.38;
-      const py = row === 0 ? 2.98 : 1.75;
+      const px = (col - 1.5) * 2.48;
+      const py = row === 0 ? 3.1 : 1.76;
 
       const canvas = document.createElement('canvas');
-      canvas.width = 148;
-      canvas.height = 68;
+      canvas.width = 260;
+      canvas.height = 136;
       const tex = new THREE.CanvasTexture(canvas);
       tex.minFilter = THREE.NearestFilter;
       tex.magFilter = THREE.NearestFilter;
       tex.generateMipmaps = false;
 
       const mat = new THREE.MeshBasicMaterial({ map: tex });
-      const plaqueMesh = new THREE.Mesh(new THREE.PlaneGeometry(2.14, 0.98), mat);
+      const plaqueMesh = new THREE.Mesh(new THREE.PlaneGeometry(2.34, 1.22), mat);
       plaqueMesh.position.set(px, py, -3.11);
       plaqueMesh.userData.pickGunId = gid;
+      gunPlaqueScene.add(plaqueMesh);
 
-      const frameMesh = new THREE.Mesh(new THREE.BoxGeometry(2.22, 1.06, 0.08), steelMat);
+      const frameMesh = new THREE.Mesh(new THREE.BoxGeometry(2.42, 1.3, 0.08), steelMat);
       frameMesh.position.set(px, py, -3.16);
       frameMesh.userData.pickGunId = gid;
 
-      gunshopGroup.add(frameMesh, plaqueMesh);
+      gunshopGroup.add(frameMesh);
       gunPickMeshes.push(plaqueMesh, frameMesh);
       gunPlaques.push({ gid, px, py, canvas, tex });
     });
@@ -474,10 +477,10 @@ export function createHubRooms(scene, camera, textures) {
   function focusGunPlaque(gunId) {
     const pl = gunPlaques.find((p) => p.gid === gunId) || gunPlaques[0];
     setCameraGoal({
-      target: [pl.px * 0.55, 2.15, -3.1],
-      yaw: pl.px * 0.03,
-      pitch: 0.06,
-      dist: 5.15,
+      target: [pl.px * 0.48, 2.28, -3.1],
+      yaw: pl.px * 0.025,
+      pitch: 0.05,
+      dist: 4.15,
     });
   }
 
@@ -505,6 +508,7 @@ export function createHubRooms(scene, camera, textures) {
     showroomGroup.visible = roomName === 'showroom';
     mechanicGroup.visible = roomName === 'mechanic';
     gunshopGroup.visible = roomName === 'gunshop';
+    gunPlaqueScene.visible = roomName === 'gunshop';
 
     if (roomName === 'menu') {
       if (menuCarMesh) menuCarAnchor.remove(menuCarMesh);
@@ -590,6 +594,7 @@ export function createHubRooms(scene, camera, textures) {
 
   return {
     panelState,
+    gunPlaqueScene,
     setRoom,
     setCameraGoal,
     orbitByPixels,
