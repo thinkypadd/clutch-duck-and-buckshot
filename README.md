@@ -35,6 +35,8 @@ Wrecked rival cars burn permanently on the circuit for the rest of the race. Win
 
 ## 🎮 3D Pixel Cabin & Controls
 
+Open **Settings → Cabin** to switch between **Classic 2.5D Pixel** (default) and **3D Coupe**. Both use perspective head turns and square-texel panel art; Coupe adds a left-hand driver position, raked windshield, inward-sloping windows, and an angled console. The choice is saved and can be changed while a race is paused.
+
 ```
   ┌────────────────────────────────────────────────────────────────────────────┐
   │ [⚙]  [TRUNK TRAP]   [LIVE 3D REARVIEW MIRROR]     [PASSENGER SUN VISOR]   │

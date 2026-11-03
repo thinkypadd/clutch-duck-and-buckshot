@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 
-function makePixelLayer(width, height, geoW, geoH) {
+function makePixelLayer(width, height, geoW) {
+  const geoH = geoW * height / width;
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
@@ -23,7 +24,7 @@ function makePixelLayer(width, height, geoW, geoH) {
   return { canvas, ctx, tex, mesh, width, height, geoW, geoH };
 }
 
-export function createCabin3DRig(rearMirrorTexture) {
+export function createCabin3DRig(rearMirrorTexture, initialMode = 'classic_25d') {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(62, 16 / 9, 0.08, 12.0);
   camera.position.set(0, 0, 0);
@@ -31,8 +32,8 @@ export function createCabin3DRig(rearMirrorTexture) {
   const raycaster = new THREE.Raycaster();
   const mathPlane = new THREE.Plane();
   const worldHit = new THREE.Vector3();
-  const localHit = new THREE.Vector3();
-  const normalVec = new THREE.Vector3();
+  let eyeX = 0;
+  const pillars = [];
 
   // 1. Hermetically Sealed Roof, Floor & Corner Pillar Trim (extends behind camera to z=+1.35)
   const roofMat = new THREE.MeshBasicMaterial({ color: 0x161920, side: THREE.DoubleSide });
@@ -59,10 +60,11 @@ export function createCabin3DRig(rearMirrorTexture) {
     rearSeal.position.set(sx * 1.41, 0, 1.16);
     rearSeal.renderOrder = 2;
     scene.add(frontSeal, rearSeal);
+    pillars.push(frontSeal, rearSeal);
   }
 
   // 2. Exterior Hood & Protruding Engine Intake Plane (lowered so windshield stays wide open!)
-  const hood = makePixelLayer(360, 110, 3.05, 0.78);
+  const hood = makePixelLayer(360, 110, 3.05);
   hood.mesh.position.set(0, -0.64, -1.88);
   hood.mesh.rotation.x = -0.24;
   hood.mesh.renderOrder = 1;
@@ -95,62 +97,98 @@ export function createCabin3DRig(rearMirrorTexture) {
     depthWrite: false,
   });
 
-  // Matches windshield MIRROR_CUTOUT (x=150..250, y=17..41 on 480x270 -> geo 2.88x1.62 at z=-1.35)
-  const mirrorMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.16), mirrorMat);
-  mirrorMesh.position.set(-0.24, 0.636, -1.355);
-  mirrorMesh.renderOrder = 2;
-  scene.add(mirrorMesh);
-
-  // Matches leftDoor exterior side-mirror cutout (x=307..355, y=139..167 on 384x256)
-  const sideMirrorMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.35, 0.195), mirrorMat);
-  sideMirrorMesh.position.set(-1.425, -0.158, -1.027);
-  sideMirrorMesh.rotation.y = Math.PI * 0.5;
-  sideMirrorMesh.renderOrder = 1;
-  scene.add(sideMirrorMesh);
-
   // 4. Left, Right & Rear Cabin Bulkhead Planes (fully encloses 360 degrees!)
-  const leftDoor = makePixelLayer(384, 256, 2.56, 1.62);
+  const leftDoor = makePixelLayer(384, 256, 2.56);
   leftDoor.mesh.position.set(-1.41, 0, -0.1);
   leftDoor.mesh.rotation.y = Math.PI * 0.5;
   leftDoor.mesh.renderOrder = 2;
   scene.add(leftDoor.mesh);
 
-  const rightDoor = makePixelLayer(384, 256, 2.56, 1.62);
+  const rightDoor = makePixelLayer(384, 256, 2.56);
   rightDoor.mesh.position.set(1.41, 0, -0.1);
   rightDoor.mesh.rotation.y = -Math.PI * 0.5;
   rightDoor.mesh.renderOrder = 2;
   scene.add(rightDoor.mesh);
 
-  const rearWall = makePixelLayer(384, 256, 2.88, 1.62);
+  const rearWall = makePixelLayer(384, 256, 2.88);
   rearWall.mesh.position.set(0, 0, 1.16);
   rearWall.mesh.rotation.y = Math.PI;
   rearWall.mesh.renderOrder = 2;
   scene.add(rearWall.mesh);
 
   // 5. Forward Windshield, A-Pillars, Compact Overhead Trunk Switch, Rearview Bezel & Sun Visor
-  const windshield = makePixelLayer(480, 270, 2.88, 1.62);
+  const windshield = makePixelLayer(480, 270, 2.88);
   windshield.mesh.position.set(0, 0, -1.35);
   windshield.mesh.renderOrder = 3;
   scene.add(windshield.mesh);
 
-  // 6. Compact Lower Dashboard (~30% bottom height so ~68% of windshield stays clear!)
-  const dash = makePixelLayer(480, 140, 2.48, 0.48);
-  dash.mesh.position.set(0, -0.47, -1.16);
-  dash.mesh.rotation.x = -0.08;
+  // Lower the restored square-texel panels together to preserve the road view.
+  const dash = makePixelLayer(480, 140, 2.0);
+  dash.mesh.position.set(0, -0.405, -1.16);
   dash.mesh.renderOrder = 5;
   scene.add(dash.mesh);
 
-  // 7. Foreground Steering Wheel & Short-Throw Nitro Pull-Handle (tucked low in bottom ~30%)
-  const wheelPull = makePixelLayer(480, 140, 2.14, 0.43);
-  wheelPull.mesh.position.set(0, -0.4, -1.0);
-  wheelPull.mesh.rotation.x = -0.05;
+  const wheelPull = makePixelLayer(480, 140, 2.14);
+  wheelPull.mesh.position.set(0, -0.28, -1.0);
   wheelPull.mesh.renderOrder = 6;
   scene.add(wheelPull.mesh);
 
   const layers = { hood, leftDoor, rightDoor, rearWall, windshield, dash, wheelPull };
 
+  // Panel UVs remain in the shared painter's coordinates, including the angled console.
+  dash.mesh.geometry.dispose();
+  dash.mesh.geometry = new THREE.PlaneGeometry(dash.geoW, dash.geoH, 3, 1);
+  const dashPositions = dash.mesh.geometry.attributes.position;
+  const dashUVs = dash.mesh.geometry.attributes.uv;
+  const dashCuts = [0, 184, 310, 480];
+
+  function attachMirror(layer, x, y, w, h) {
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(
+      w / layer.width * layer.geoW, h / layer.height * layer.geoH), mirrorMat);
+    mesh.position.set((x + w / 2) / layer.width * layer.geoW - layer.geoW / 2,
+      layer.geoH / 2 - (y + h / 2) / layer.height * layer.geoH, -0.002);
+    mesh.renderOrder = layer.mesh.renderOrder - 1;
+    layer.mesh.add(mesh);
+  }
+  attachMirror(windshield, 150, 17, 100, 24);
+  attachMirror(leftDoor, 307, 139, 48, 28);
+
+  function setMode(nextMode) {
+    const coupe = nextMode === 'coupe_3d';
+    eyeX = coupe ? -0.34 : 0;
+    dash.mesh.position.y = coupe ? -0.40 : -0.405;
+    windshield.mesh.rotation.x = coupe ? THREE.MathUtils.degToRad(32) : 0;
+    for (const [door, side] of [[leftDoor, -1], [rightDoor, 1]]) {
+      door.mesh.rotation.set(0, -side * Math.PI / 2, 0);
+      door.mesh.rotateX(coupe ? THREE.MathUtils.degToRad(15) : 0);
+    }
+    roofMesh.position.y = coupe ? 0.70 : 0.8;
+    rearWall.mesh.rotation.x = coupe ? -THREE.MathUtils.degToRad(12) : 0;
+    for (const pillar of pillars) {
+      pillar.rotation.x = coupe ? THREE.MathUtils.degToRad(32) : 0;
+    }
+    const yaw = coupe ? -THREE.MathUtils.degToRad(14) : 0;
+    const scale = dash.geoW / dash.width;
+    for (let i = 0; i < dashPositions.count; i++) {
+      const px = dashCuts[i % 4];
+      const consoleX = Math.min(Math.max(px - 184, 0), 126) * scale;
+      const x = (Math.min(px, 184) - 240) * scale + consoleX * Math.cos(yaw)
+        + Math.max(px - 310, 0) * scale;
+      dashPositions.setX(i, x);
+      dashPositions.setZ(i, -consoleX * Math.sin(yaw));
+      dashUVs.setX(i, px / 480);
+    }
+    dashPositions.needsUpdate = true;
+    dashUVs.needsUpdate = true;
+    dash.mesh.geometry.computeVertexNormals();
+    dash.mesh.geometry.computeBoundingSphere();
+    for (const layer of Object.values(layers)) layer.dragFace = null;
+    scene.updateMatrixWorld(true);
+    updateCamera(0, 0, 0, 0, 0, 0);
+  }
+
   function updateCamera(viewYaw, panX, panY, smoothRoll, shakeX, shakeY) {
-    camera.position.set(shakeX * 0.0022, -shakeY * 0.0022, 0);
+    camera.position.set(eyeX + shakeX * 0.0022, -shakeY * 0.0022, 0);
     const headYawRad = viewYaw * 1.38 + panX * 0.11;
     const lookVec = new THREE.Vector3(
       Math.sin(headYawRad),
@@ -160,33 +198,54 @@ export function createCabin3DRig(rearMirrorTexture) {
 
     camera.up.set(0, 1, 0);
     camera.lookAt(camera.position.clone().add(lookVec));
-    camera.rotateZ(smoothRoll * 0.45);
+    camera.rotateZ(smoothRoll);
     camera.updateMatrixWorld();
   }
 
-  function projectToLayer(layerName, ndcX, ndcY) {
+  function projectToLayer(layerName, ndcX, ndcY, captured = false) {
     const layer = layers[layerName];
     if (!layer) return null;
-    layer.mesh.updateMatrixWorld();
+    scene.updateMatrixWorld(true);
     raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera);
 
-    normalVec.set(0, 0, 1).transformDirection(layer.mesh.matrixWorld);
-    mathPlane.setFromNormalAndCoplanarPoint(normalVec, layer.mesh.position);
+    const intersections = raycaster.intersectObjects(Object.values(layers).map(l => l.mesh), false);
+    const target = intersections.find(hit => hit.object === layer.mesh);
+    if (target) {
+      if (!captured) {
+        const shellHit = raycaster.intersectObjects([roofMesh, floorMesh, ...pillars], false)[0];
+        if (shellHit && shellHit.distance < target.distance) return null;
+        for (const hit of intersections) {
+          if (hit === target) break;
+          const blocker = Object.values(layers).find(l => l.mesh === hit.object);
+          const alpha = blocker.ctx.getImageData(
+            Math.min(blocker.width - 1, Math.floor(hit.uv.x * blocker.width)),
+            Math.min(blocker.height - 1, Math.floor((1 - hit.uv.y) * blocker.height)), 1, 1).data[3];
+          if (alpha > 127) return null;
+        }
+      }
+      layer.dragFace = target.face;
+      return { x: target.uv.x * layer.width, y: (1 - target.uv.y) * layer.height, inBounds: true };
+    }
+    if (!captured || !layer.dragFace) return null;
 
-    const hit = raycaster.ray.intersectPlane(mathPlane, worldHit);
-    if (!hit) return null;
-
-    localHit.copy(worldHit);
-    layer.mesh.worldToLocal(localHit);
-
-    const u = localHit.x / layer.geoW + 0.5;
-    const v = localHit.y / layer.geoH + 0.5;
+    // Continue a captured drag on its actual panel plane after leaving the mesh.
+    const { position, uv } = layer.mesh.geometry.attributes;
+    const indices = [layer.dragFace.a, layer.dragFace.b, layer.dragFace.c];
+    const vertices = indices.map(i => new THREE.Vector3().fromBufferAttribute(position, i)
+      .applyMatrix4(layer.mesh.matrixWorld));
+    mathPlane.setFromCoplanarPoints(...vertices);
+    if (!raycaster.ray.intersectPlane(mathPlane, worldHit)) return null;
+    const weights = THREE.Triangle.getBarycoord(worldHit, ...vertices, new THREE.Vector3());
+    const u = indices.reduce((sum, i, n) => sum + uv.getX(i) * weights.getComponent(n), 0);
+    const v = indices.reduce((sum, i, n) => sum + uv.getY(i) * weights.getComponent(n), 0);
     return {
       x: u * layer.width,
       y: (1 - v) * layer.height,
       inBounds: u >= -0.04 && u <= 1.04 && v >= -0.04 && v <= 1.04,
     };
   }
+
+  setMode(initialMode);
 
   function markAllUpdated() {
     hood.tex.needsUpdate = true;
@@ -202,6 +261,7 @@ export function createCabin3DRig(rearMirrorTexture) {
     scene,
     camera,
     layers,
+    setMode,
     updateCamera,
     projectToLayer,
     markAllUpdated,

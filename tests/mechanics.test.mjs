@@ -6,6 +6,7 @@ import {
   NITRO_STAGE_COLORS,
   createDefaultSave,
   loadSave,
+  persistSave,
   isCarUpgradeOwned,
   isGunUpgradeOwned,
   getComputedCarStats,
@@ -405,7 +406,7 @@ import { createCabin3DRig } from '../src/cockpit3d.js';
     createElement: () => ({
       width: 0,
       height: 0,
-      getContext: () => ({ imageSmoothingEnabled: false }),
+      getContext: () => ({ imageSmoothingEnabled: false, getImageData: () => ({ data: [0, 0, 0, 0] }) }),
     }),
   };
   try {
@@ -421,14 +422,102 @@ import { createCabin3DRig } from '../src/cockpit3d.js';
     // Looking left (-1) rotates head toward angled leftDoor plane
     rig.updateCamera(-1, 0, 0, 0, 0, 0);
     assert.equal(rig.projectToLayer('leftDoor', 0, 0).inBounds, true);
-    assert.equal(rig.projectToLayer('windshield', 0, 0).inBounds, false);
+    assert.equal(rig.projectToLayer('windshield', 0, 0), null);
 
     // Looking right (+1) rotates head toward angled rightDoor plane, and rearWall seals cabin back
     rig.updateCamera(1, 0, 0, 0, 0, 0);
     assert.equal(rig.projectToLayer('rightDoor', 0, 0).inBounds, true);
-    assert.equal(rig.projectToLayer('windshield', 0, 0).inBounds, false);
+    assert.equal(rig.projectToLayer('windshield', 0, 0), null);
     assert.ok(rig.layers.rearWall, 'Rear bulkhead layer seals back of 3D cabin');
-    assert.ok(rig.layers.dash.mesh.position.y <= -0.45, 'Lowered dash leaves windshield wide open');
+    for (const mode of ['classic_25d', 'coupe_3d', 'classic_25d']) {
+      rig.setMode(mode);
+      const coupe = mode === 'coupe_3d';
+      assert.equal(rig.camera.position.x, coupe ? -0.34 : 0);
+      assert.equal(rig.layers.windshield.mesh.rotation.x > 0.5, coupe);
+      assert.equal(rig.layers.dash.mesh.geometry.attributes.position.getZ(2) > 0.1, coupe);
+      const glassTop = rig.layers.windshield.mesh.localToWorld(new THREE.Vector3(0, 0.5, 0));
+      const glassBottom = rig.layers.windshield.mesh.localToWorld(new THREE.Vector3(0, -0.5, 0));
+      assert.equal(glassTop.z > glassBottom.z, coupe, 'Coupe windshield slopes toward the driver at the roof');
+      for (const name of ['leftDoor', 'rightDoor']) {
+        const door = rig.layers[name].mesh;
+        const top = door.localToWorld(new THREE.Vector3(0, 0.5, 0));
+        const bottom = door.localToWorld(new THREE.Vector3(0, -0.5, 0));
+        assert.equal(Math.abs(top.x) < Math.abs(bottom.x) - 0.01, coupe,
+          'Coupe window tops tilt inward');
+      }
+      rig.updateCamera(0, 0, 0, 0, 3, 4);
+      assert.ok(Math.abs(rig.camera.position.x - (coupe ? -0.34 : 0) - 0.0066) < 1e-8,
+        'Shake preserves the driver seat offset');
+
+      for (const layer of Object.values(rig.layers)) {
+        assert.ok(Math.abs(layer.geoW / layer.geoH - layer.width / layer.height) < 1e-8,
+          `${mode} ${layer.width}x${layer.height} uses square texels`);
+      }
+      for (const yaw of [-1, -0.5, 0, 0.5, 1]) {
+        rig.updateCamera(yaw, 0, 0, 0, 0, 0);
+        for (const [name, x, y] of [
+          ['windshield', 97, 29], ['windshield', 320, 45],
+          ['wheelPull', 114, 84], ['wheelPull', 350, 58],
+          ['dash', 245, 32], ['dash', 224, 70], ['dash', 284, 113],
+        ]) {
+          const layer = rig.layers[name];
+          let local = new THREE.Vector3((x / layer.width - 0.5) * layer.geoW,
+            (0.5 - y / layer.height) * layer.geoH, 0);
+          if (name === 'dash' && coupe) {
+            const span = Math.min(Math.max(x - 184, 0), 126) * layer.geoW / layer.width;
+            local.x += span * (Math.cos(THREE.MathUtils.degToRad(14)) - 1);
+            local.z = span * Math.sin(THREE.MathUtils.degToRad(14));
+          }
+          const world = layer.mesh.localToWorld(local);
+          const cameraLocal = world.clone().applyMatrix4(rig.camera.matrixWorldInverse);
+          const ndc = world.project(rig.camera);
+          if (cameraLocal.z >= -0.08) continue;
+          const hit = rig.projectToLayer(name, ndc.x, ndc.y, true);
+          assert.ok(hit, `${mode} ${name} projects at yaw ${yaw}`);
+          assert.ok(Math.abs(hit.x - x) < 0.001 && Math.abs(hit.y - y) < 0.001,
+            `${mode} ${name} preserves control coordinates at yaw ${yaw}`);
+          if (yaw === 0) {
+            assert.ok(Math.abs(ndc.x) < 1 && Math.abs(ndc.y) < 1,
+              `${mode} ${name} control is on screen`);
+          }
+        }
+      }
+
+      rig.updateCamera(0, 0, 0, 0, 0, 0);
+      const wheel = rig.layers.wheelPull;
+      const wheelEdges = [[66, 84], [162, 84], [114, 36], [114, 132]].map(([x, y]) =>
+        wheel.mesh.localToWorld(new THREE.Vector3((x / 480 - 0.5) * wheel.geoW,
+          (0.5 - y / 140) * wheel.geoH, 0)).project(rig.camera));
+      const wheelWidth = (wheelEdges[1].x - wheelEdges[0].x) * 240;
+      const wheelHeight = (wheelEdges[2].y - wheelEdges[3].y) * 135;
+      assert.ok(Math.abs(wheelWidth - wheelHeight) < 1e-6, 'Forward wheel projects as a circle');
+      assert.ok(wheelEdges.every(p => Math.abs(p.x) < 1 && Math.abs(p.y) < 1),
+        'The full wheel rim stays on screen');
+      const wheelCenter = wheel.mesh.localToWorld(new THREE.Vector3(
+        (114 / 480 - 0.5) * wheel.geoW, (0.5 - 84 / 140) * wheel.geoH, 0)).project(rig.camera);
+      assert.ok(rig.projectToLayer('wheelPull', wheelCenter.x, wheelCenter.y));
+      assert.equal(rig.projectToLayer('wheelPull', 3, -3), null);
+      assert.equal(rig.projectToLayer('wheelPull', 3, -3, true).inBounds, false,
+        'Captured wheel drag continues beyond panel bounds');
+
+      const dash = rig.layers.dash;
+      const dashPoint = dash.mesh.localToWorld(new THREE.Vector3(0, 0, coupe ?
+        56 * dash.geoW / 480 * Math.sin(THREE.MathUtils.degToRad(14)) : 0)).project(rig.camera);
+      wheel.ctx.getImageData = () => ({ data: [0, 0, 0, 255] });
+      assert.equal(rig.projectToLayer('dash', dashPoint.x, dashPoint.y), null,
+        'Opaque foreground blocks clicks on the dashboard');
+      wheel.ctx.getImageData = () => ({ data: [0, 0, 0, 0] });
+
+      for (const [layer, rect] of [[rig.layers.windshield, [150, 17, 100, 24]],
+        [rig.layers.leftDoor, [307, 139, 48, 28]]]) {
+        const mirror = layer.mesh.children[0];
+        assert.ok(mirror, 'Mirror follows its panel transform');
+        assert.ok(Math.abs((mirror.position.x / layer.geoW + 0.5) * layer.width
+          - rect[0] - rect[2] / 2) < 1e-6);
+        assert.ok(Math.abs((0.5 - mirror.position.y / layer.geoH) * layer.height
+          - rect[1] - rect[3] / 2) < 1e-6);
+      }
+    }
   } finally {
     globalThis.document = prevDoc;
   }
@@ -453,6 +542,19 @@ import { createCabin3DRig } from '../src/cockpit3d.js';
       const worldUp = new THREE.Vector3(0, 1, 0).applyQuaternion(cam.quaternion);
       assert.ok(worldUp.y > 0.99, `Camera stays upright at heading ${deg} deg, yaw ${sideYaw}`);
     }
+  }
+}
+
+{
+  let stored;
+  const storage = { getItem: () => stored, setItem: (key, value) => { stored = value; } };
+  for (const value of [undefined, null, 'invalid', 1, 'classic_25d', 'coupe_3d']) {
+    stored = JSON.stringify({ cash: 1234, cabinMode: value });
+    const save = loadSave(storage);
+    assert.equal(save.cabinMode, value === 'coupe_3d' ? value : 'classic_25d');
+    assert.equal(save.cash, 1234, 'Cabin migration preserves progress');
+    persistSave(save, storage);
+    assert.equal(loadSave(storage).cabinMode, save.cabinMode);
   }
 }
 

@@ -633,6 +633,7 @@ export function createDefaultSave() {
     gunParts,
     ownedGunParts,
     godMode: false,
+    cabinMode: 'classic_25d',
     totalWins: 0,
     totalWrecks: 0,
   };
@@ -699,6 +700,7 @@ export function loadSave(storage = globalThis.localStorage) {
     }
     if (!TRACKS[merged.selectedTrack]) merged.selectedTrack = 'canyon';
     if (!LEAGUES[merged.selectedLeague]) merged.selectedLeague = 'scrapyard';
+    if (merged.cabinMode !== 'coupe_3d') merged.cabinMode = 'classic_25d';
 
     return merged;
   } catch {

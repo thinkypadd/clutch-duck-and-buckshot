@@ -110,6 +110,7 @@ const gunshopModActionEl = document.getElementById('gunshop-mod-action');
 
 const settingsHeadingEl = document.getElementById('settings-heading');
 const btnToggleAudio = document.getElementById('btn-toggle-audio');
+const btnToggleCabin = document.getElementById('btn-toggle-cabin');
 const btnResetSave = document.getElementById('btn-reset-save');
 const btnResume = document.getElementById('btn-resume');
 const btnRestartRace = document.getElementById('btn-restart-race');
@@ -268,7 +269,14 @@ try {
   const postPass = createPsxPostPass();
   const textures = buildPsxTextures();
   const rooms = createHubRooms(scene, camera, textures);
-  const cabin3D = createCabin3DRig(rearTarget.texture);
+  const cabin3D = createCabin3DRig(rearTarget.texture, save.cabinMode);
+  function syncCabinSetting() {
+    cabin3D.setMode(save.cabinMode);
+    const coupe = save.cabinMode === 'coupe_3d';
+    btnToggleCabin.textContent = coupe ? 'CABIN: 3D COUPE' : 'CABIN: CLASSIC 2.5D PIXEL';
+    btnToggleCabin.setAttribute('aria-pressed', String(coupe));
+  }
+  syncCabinSetting();
 
   let activeTrack = null;
   let activeRivals = null;
@@ -1336,6 +1344,12 @@ try {
     btnToggleAudio.textContent = sound.muted ? 'AUDIO: OFF' : 'AUDIO: ON';
   }
   btnToggleAudio.addEventListener('click', toggleAudio);
+  btnToggleCabin.addEventListener('click', () => {
+    cockpit.releaseAllHolds(car, nitro);
+    save.cabinMode = save.cabinMode === 'coupe_3d' ? 'classic_25d' : 'coupe_3d';
+    syncCabinSetting();
+    persistSave(save);
+  });
 
   btnResetSave.addEventListener('click', () => {
     if (!resetConfirmArmed) {
@@ -1344,6 +1358,7 @@ try {
       return;
     }
     save = createDefaultSave();
+    syncCabinSetting();
     persistSave(save);
     resetConfirmArmed = false;
     btnResetSave.textContent = 'SAVE RESET!';
@@ -1552,6 +1567,7 @@ try {
     const fwdZ = curSmp.flatTan.z * cosH + curSmp.right.z * sinH;
     const carForward = new THREE.Vector3(fwdX, curSmp.tan.y, fwdZ).normalize();
     const carRight = new THREE.Vector3().crossVectors(carForward, upVec).normalize();
+    camera.position.addScaledVector(carRight, save.cabinMode === 'coupe_3d' ? -0.34 : 0);
 
     // Update backward-facing Rearview Mirror camera
     rearCamera.position.set(

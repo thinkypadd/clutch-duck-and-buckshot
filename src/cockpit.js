@@ -301,9 +301,10 @@ export function createCockpitController(overlayCanvas, cabin3D, sound, callbacks
 
   function getLayerHits(ndcX, ndcY) {
     return {
-      wind: cabin3D.projectToLayer('windshield', ndcX, ndcY),
-      dash: cabin3D.projectToLayer('dash', ndcX, ndcY),
-      wp: cabin3D.projectToLayer('wheelPull', ndcX, ndcY),
+      wind: cabin3D.projectToLayer('windshield', ndcX, ndcY,
+        ['spent_hull', 'fresh_ammo', 'slide_rack'].includes(activeHold)),
+      dash: cabin3D.projectToLayer('dash', ndcX, ndcY, activeHold === 'shifter'),
+      wp: cabin3D.projectToLayer('wheelPull', ndcX, ndcY, activeHold === 'wheel' || activeHold === 'nitro'),
     };
   }
 
