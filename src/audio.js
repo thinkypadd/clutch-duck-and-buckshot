@@ -6,6 +6,8 @@ export class SoundEngine {
     this.engineGain = null;
     this.oscA = null;
     this.oscB = null;
+    this.blowerOsc = null;
+    this.blowerGain = null;
     this.engineFilter = null;
     this.rumbleGain = null;
     this.noiseBuffer = null;
@@ -24,7 +26,6 @@ export class SoundEngine {
     this.master.gain.value = this.muted ? 0 : 0.42;
     this.master.connect(this.ctx.destination);
 
-    // Reusable white-noise buffer for shotgun, nitro hiss, crashes, and curb buzz
     const len = this.ctx.sampleRate * 1.5;
     this.noiseBuffer = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
     const data = this.noiseBuffer.getChannelData(0);
@@ -32,7 +33,6 @@ export class SoundEngine {
       data[i] = Math.random() * 2 - 1;
     }
 
-    // Continuous engine synth
     this.oscA = this.ctx.createOscillator();
     this.oscB = this.ctx.createOscillator();
     this.oscA.type = 'sawtooth';
@@ -43,7 +43,7 @@ export class SoundEngine {
     this.engineFilter = this.ctx.createBiquadFilter();
     this.engineFilter.type = 'lowpass';
     this.engineFilter.frequency.value = 240;
-    this.engineFilter.Q.value = 2.5;
+    this.engineFilter.Q.value = 2.4;
 
     this.engineGain = this.ctx.createGain();
     this.engineGain.gain.value = 0;
@@ -56,14 +56,24 @@ export class SoundEngine {
     this.oscA.start();
     this.oscB.start();
 
-    // Continuous curb/skid loop
+    // Supercharger whine oscillator
+    this.blowerOsc = this.ctx.createOscillator();
+    this.blowerOsc.type = 'triangle';
+    this.blowerOsc.frequency.value = 680;
+    this.blowerGain = this.ctx.createGain();
+    this.blowerGain.gain.value = 0;
+    this.blowerOsc.connect(this.blowerGain);
+    this.blowerGain.connect(this.master);
+    this.blowerOsc.start();
+
+    // Curb / drift / sand loop
     const skidSrc = this.ctx.createBufferSource();
     skidSrc.buffer = this.noiseBuffer;
     skidSrc.loop = true;
     this.skidFilter = this.ctx.createBiquadFilter();
     this.skidFilter.type = 'bandpass';
     this.skidFilter.frequency.value = 880;
-    this.skidFilter.Q.value = 4.0;
+    this.skidFilter.Q.value = 3.8;
     this.rumbleGain = this.ctx.createGain();
     this.rumbleGain.gain.value = 0;
     skidSrc.connect(this.skidFilter);
@@ -84,75 +94,124 @@ export class SoundEngine {
     const t = this.ctx.currentTime;
     this.engineGain.gain.setTargetAtTime(0, t, 0.04);
     this.rumbleGain.gain.setTargetAtTime(0, t, 0.04);
+    this.blowerGain.gain.setTargetAtTime(0, t, 0.04);
   }
 
-  updateContinuous({ rpm, gasHeld, nitroStacks, onCurb, offRoad, brakingHard, active }) {
+  updateContinuous({
+    rpm,
+    nitroStacks,
+    blowerActive,
+    drifting,
+    onCurb,
+    offRoad,
+    active,
+    carId,
+  }) {
     if (!this.ctx || !this.engineGain) return;
     const t = this.ctx.currentTime;
     if (!active) {
-      this.engineGain.gain.setTargetAtTime(0, t, 0.05);
-      this.rumbleGain.gain.setTargetAtTime(0, t, 0.05);
+      this.suspendEngine();
       return;
     }
 
-    const baseFreq = 42 + rpm * 128 + nitroStacks * 22;
+    const v8Deep = carId === 'muscle' || carId === 'truck' ? 0.82 : carId === 'rally' ? 1.15 : 1.0;
+    const baseFreq = (40 + rpm * 132 + nitroStacks * 20) * v8Deep;
     this.oscA.frequency.setTargetAtTime(baseFreq, t, 0.04);
     this.oscB.frequency.setTargetAtTime(baseFreq * 0.503, t, 0.04);
 
-    const cutoff = 190 + rpm * 750 + (gasHeld ? 280 : 0) + nitroStacks * 340;
+    const cutoff = 220 + rpm * 820 + nitroStacks * 320;
     this.engineFilter.frequency.setTargetAtTime(cutoff, t, 0.05);
+    this.engineGain.gain.setTargetAtTime(0.15 + nitroStacks * 0.03, t, 0.05);
 
-    const targetVol = 0.11 + (gasHeld ? 0.09 : 0) + nitroStacks * 0.035;
-    this.engineGain.gain.setTargetAtTime(targetVol, t, 0.05);
+    this.blowerOsc.frequency.setTargetAtTime(520 + rpm * 1150, t, 0.04);
+    this.blowerGain.gain.setTargetAtTime(blowerActive ? 0.09 : 0, t, 0.05);
 
     let surfaceVol = 0;
-    if (brakingHard) {
-      this.skidFilter.frequency.setTargetAtTime(1350, t, 0.03);
-      surfaceVol = 0.14;
+    if (drifting) {
+      this.skidFilter.frequency.setTargetAtTime(1420, t, 0.03);
+      surfaceVol = 0.16;
     } else if (onCurb) {
-      this.skidFilter.frequency.setTargetAtTime(210, t, 0.03);
-      surfaceVol = 0.18;
+      this.skidFilter.frequency.setTargetAtTime(220, t, 0.03);
+      surfaceVol = 0.17;
     } else if (offRoad) {
-      this.skidFilter.frequency.setTargetAtTime(340, t, 0.03);
-      surfaceVol = 0.12;
+      this.skidFilter.frequency.setTargetAtTime(360, t, 0.03);
+      surfaceVol = 0.11;
     }
     this.rumbleGain.gain.setTargetAtTime(surfaceVol, t, 0.04);
   }
 
-  playShotgunBlast() {
+  playGearShift(downshift = false) {
+    if (!this.ctx || this.muted) return;
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(downshift ? 210 : 320, t);
+    osc.frequency.exponentialRampToValueAtTime(downshift ? 420 : 180, t + 0.065);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.28, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.075);
+    osc.connect(g);
+    g.connect(this.master);
+    osc.start(t);
+    osc.stop(t + 0.08);
+  }
+
+  playWeaponFire(gunId, suppressed = false) {
     if (!this.ctx || this.muted) return;
     const t = this.ctx.currentTime;
 
-    // Heavy noise transient
     const noise = this.ctx.createBufferSource();
     noise.buffer = this.noiseBuffer;
     const filter = this.ctx.createBiquadFilter();
     filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(2400, t);
-    filter.frequency.exponentialRampToValueAtTime(160, t + 0.36);
+
+    const dur =
+      gunId === 'sawed_off' ? 0.38 : gunId === 'revolver' ? 0.3 : gunId === 'm1911' ? 0.18 : 0.11;
+    const startFreq = suppressed ? 900 : gunId === 'sawed_off' ? 2400 : 2900;
+    filter.frequency.setValueAtTime(startFreq, t);
+    filter.frequency.exponentialRampToValueAtTime(160, t + dur);
 
     const nGain = this.ctx.createGain();
-    nGain.gain.setValueAtTime(0.95, t);
-    nGain.gain.exponentialRampToValueAtTime(0.001, t + 0.38);
+    const vol = suppressed ? 0.36 : gunId === 'smg' ? 0.48 : 0.88;
+    nGain.gain.setValueAtTime(vol, t);
+    nGain.gain.exponentialRampToValueAtTime(0.001, t + dur);
 
     noise.connect(filter);
     filter.connect(nGain);
     nGain.connect(this.master);
     noise.start(t);
-    noise.stop(t + 0.4);
+    noise.stop(t + dur + 0.02);
 
-    // Sub-bass cannon thump
     const sub = this.ctx.createOscillator();
     sub.type = 'triangle';
-    sub.frequency.setValueAtTime(135, t);
-    sub.frequency.exponentialRampToValueAtTime(32, t + 0.24);
+    const subStart = gunId === 'sawed_off' ? 135 : gunId === 'revolver' ? 165 : 210;
+    sub.frequency.setValueAtTime(subStart, t);
+    sub.frequency.exponentialRampToValueAtTime(38, t + dur * 0.7);
     const sGain = this.ctx.createGain();
-    sGain.gain.setValueAtTime(0.85, t);
-    sGain.gain.exponentialRampToValueAtTime(0.001, t + 0.26);
+    sGain.gain.setValueAtTime(vol * 0.85, t);
+    sGain.gain.exponentialRampToValueAtTime(0.001, t + dur * 0.75);
     sub.connect(sGain);
     sGain.connect(this.master);
     sub.start(t);
-    sub.stop(t + 0.28);
+    sub.stop(t + dur * 0.8);
+  }
+
+  playEnemyShot() {
+    if (!this.ctx || this.muted) return;
+    const t = this.ctx.currentTime;
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = this.noiseBuffer;
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.setValueAtTime(1650, t);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.32, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+    noise.connect(bp);
+    bp.connect(g);
+    g.connect(this.master);
+    noise.start(t);
+    noise.stop(t + 0.13);
   }
 
   playDryFire() {
@@ -163,7 +222,7 @@ export class SoundEngine {
     osc.frequency.setValueAtTime(920, t);
     osc.frequency.exponentialRampToValueAtTime(280, t + 0.035);
     const g = this.ctx.createGain();
-    g.gain.setValueAtTime(0.28, t);
+    g.gain.setValueAtTime(0.26, t);
     g.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
     osc.connect(g);
     g.connect(this.master);
@@ -193,7 +252,7 @@ export class SoundEngine {
     const osc = this.ctx.createOscillator();
     osc.type = 'triangle';
     osc.frequency.setValueAtTime(320, t);
-    osc.frequency.exponentialRampToValueAtTime(740, t + 0.065);
+    osc.frequency.exponentialRampToValueAtTime(760, t + 0.065);
     const g = this.ctx.createGain();
     g.gain.setValueAtTime(0.32, t);
     g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
@@ -208,10 +267,10 @@ export class SoundEngine {
     const t = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
     osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(opening ? 480 : 260, t);
-    osc.frequency.exponentialRampToValueAtTime(opening ? 220 : 620, t + 0.06);
+    osc.frequency.setValueAtTime(opening ? 480 : 250, t);
+    osc.frequency.exponentialRampToValueAtTime(opening ? 220 : 660, t + 0.065);
     const g = this.ctx.createGain();
-    g.gain.setValueAtTime(0.38, t);
+    g.gain.setValueAtTime(0.36, t);
     g.gain.exponentialRampToValueAtTime(0.001, t + 0.075);
     osc.connect(g);
     g.connect(this.master);
@@ -219,39 +278,54 @@ export class SoundEngine {
     osc.stop(t + 0.08);
   }
 
+  playShopBuy() {
+    if (!this.ctx || this.muted) return;
+    const notes = [523.25, 783.99];
+    notes.forEach((f, i) => {
+      const t = this.ctx.currentTime + i * 0.065;
+      const osc = this.ctx.createOscillator();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(f, t);
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.2, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+      osc.connect(g);
+      g.connect(this.master);
+      osc.start(t);
+      osc.stop(t + 0.15);
+    });
+  }
+
   playNitroTrigger(stacks) {
     if (!this.ctx || this.muted) return;
     const t = this.ctx.currentTime;
-
-    // Pressurized N2O hiss
     const noise = this.ctx.createBufferSource();
     noise.buffer = this.noiseBuffer;
     const bp = this.ctx.createBiquadFilter();
     bp.type = 'bandpass';
-    bp.frequency.setValueAtTime(1400 + stacks * 500, t);
+    bp.frequency.setValueAtTime(1400 + stacks * 450, t);
     bp.Q.value = 1.8;
     const ng = this.ctx.createGain();
-    ng.gain.setValueAtTime(0.48, t);
-    ng.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+    ng.gain.setValueAtTime(0.46, t);
+    ng.gain.exponentialRampToValueAtTime(0.001, t + 0.34);
     noise.connect(bp);
     bp.connect(ng);
     ng.connect(this.master);
     noise.start(t);
-    noise.stop(t + 0.36);
+    noise.stop(t + 0.35);
 
-    // Turbine spool pitch
     const osc = this.ctx.createOscillator();
     osc.type = 'sawtooth';
-    const base = 240 + stacks * 140;
+    const base = 230 + stacks * 130;
     osc.frequency.setValueAtTime(base, t);
-    osc.frequency.exponentialRampToValueAtTime(base * 1.9, t + 0.25);
+    osc.frequency.exponentialRampToValueAtTime(base * 1.9, t + 0.24);
     const og = this.ctx.createGain();
-    og.gain.setValueAtTime(0.26, t);
-    og.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+    og.gain.setValueAtTime(0.25, t);
+    og.gain.exponentialRampToValueAtTime(0.001, t + 0.27);
     osc.connect(og);
     og.connect(this.master);
     osc.start(t);
-    osc.stop(t + 0.3);
+    osc.stop(t + 0.29);
   }
 
   playLowPsi() {
@@ -295,16 +369,16 @@ export class SoundEngine {
     noise.buffer = this.noiseBuffer;
     const lp = this.ctx.createBiquadFilter();
     lp.type = 'lowpass';
-    lp.frequency.setValueAtTime(1600, t);
-    lp.frequency.exponentialRampToValueAtTime(120, t + 0.52);
+    lp.frequency.setValueAtTime(1750, t);
+    lp.frequency.exponentialRampToValueAtTime(110, t + 0.56);
     const g = this.ctx.createGain();
-    g.gain.setValueAtTime(0.72, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + 0.55);
+    g.gain.setValueAtTime(0.76, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
     noise.connect(lp);
     lp.connect(g);
     g.connect(this.master);
     noise.start(t);
-    noise.stop(t + 0.56);
+    noise.stop(t + 0.62);
   }
 
   playCountdown(isGo = false) {

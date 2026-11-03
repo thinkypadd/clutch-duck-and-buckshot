@@ -1,160 +1,140 @@
 import * as THREE from 'three';
+import { CARS } from './catalog.js';
+import { buildVehicle3D } from './carMesh.js';
 import { createPsxMaterial } from './psx.js';
 
-const RIVAL_SPECS = [
-  { name: 'CRIMSON GT', bodyColor: 0xc9302c, stripeColor: 0xf4efe6, baseSpeed: 40.2, lanePref: 2.8 },
-  { name: 'COBALT TURBO', bodyColor: 0x2859a8, stripeColor: 0xffb020, baseSpeed: 39.2, lanePref: -2.6 },
-  { name: 'OCHRE RALLY', bodyColor: 0xd48a22, stripeColor: 0x1a1c20, baseSpeed: 38.0, lanePref: 3.4 },
-  { name: 'JADE INTERCEPT', bodyColor: 0x2d7d52, stripeColor: 0xe8e2d2, baseSpeed: 36.8, lanePref: -3.2 },
-  { name: 'IRON COUP', bodyColor: 0x8f96a3, stripeColor: 0xd63629, baseSpeed: 35.5, lanePref: 0.4 },
+const RIVAL_ROSTER = [
+  {
+    name: 'RAZOR V8',
+    carKey: 'muscle',
+    paint: 0xc9302c,
+    parts: { engine: 1, armor: 1, trans: 1, nitro: 1 },
+    baseSpeed: 46.5,
+    maxHp: 115,
+  },
+  {
+    name: 'COBALT GT',
+    carKey: 'coupe',
+    paint: 0x2859a8,
+    parts: { engine: 1, armor: 0, trans: 2, nitro: 1 },
+    baseSpeed: 45.2,
+    maxHp: 100,
+  },
+  {
+    name: 'DUST DEVIL',
+    carKey: 'rally',
+    paint: 0xd48a22,
+    parts: { engine: 2, armor: 0, trans: 1, nitro: 1 },
+    baseSpeed: 44.4,
+    maxHp: 95,
+  },
+  {
+    name: 'WARHOG UTE',
+    carKey: 'truck',
+    paint: 0x3b6e4c,
+    parts: { engine: 1, armor: 2, trans: 0, nitro: 0 },
+    baseSpeed: 42.8,
+    maxHp: 125,
+  },
+  {
+    name: 'CHROME VIPER',
+    carKey: 'coupe',
+    paint: 0x8f96a3,
+    parts: { engine: 1, armor: 1, trans: 1, nitro: 0 },
+    baseSpeed: 41.6,
+    maxHp: 100,
+  },
+  {
+    name: 'REDLINE HATCH',
+    carKey: 'rally',
+    paint: 0xa83256,
+    parts: { engine: 0, armor: 1, trans: 1, nitro: 1 },
+    baseSpeed: 40.5,
+    maxHp: 95,
+  },
 ];
 
-function createRivalMesh(spec) {
+export function createRivalManager(scene, track, count = 5) {
   const group = new THREE.Group();
+  scene.add(group);
 
-  const bodyMat = createPsxMaterial({ color: spec.bodyColor, snapScale: 1.0 });
-  const stripeMat = createPsxMaterial({ color: spec.stripeColor, snapScale: 1.0 });
-  const glassMat = createPsxMaterial({ color: 0x1e2836, snapScale: 1.0 });
-  const tireMat = createPsxMaterial({ color: 0x17181b, snapScale: 1.0 });
-  const tailMat = createPsxMaterial({
-    color: 0xff3b2f,
-    emissive: 0xb81d13,
-    snapScale: 1.0,
-  });
-  const headMat = createPsxMaterial({
-    color: 0xfff0c2,
-    emissive: 0x8a7540,
-    snapScale: 1.0,
-  });
-
-  // Chunky 90s PS1 lower chassis
-  const chassis = new THREE.Mesh(new THREE.BoxGeometry(2.05, 0.68, 4.3), bodyMat);
-  chassis.position.y = 0.62;
-  group.add(chassis);
-
-  // Racing hood/roof stripe
-  const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.7, 4.32), stripeMat);
-  stripe.position.y = 0.63;
-  group.add(stripe);
-
-  // Greenhouse cabin
-  const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.72, 0.58, 2.05), glassMat);
-  cabin.position.set(0, 1.2, -0.15);
-  group.add(cabin);
-
-  const roof = new THREE.Mesh(new THREE.BoxGeometry(1.56, 0.1, 1.65), bodyMat);
-  roof.position.set(0, 1.5, -0.15);
-  group.add(roof);
-
-  // Rear wing spoiler
-  const wing = new THREE.Mesh(new THREE.BoxGeometry(1.96, 0.12, 0.36), stripeMat);
-  wing.position.set(0, 1.16, 1.92);
-  group.add(wing);
-
-  // Glowing twin taillights (+Z is rear of car in local space when facing -Z)
-  const tailLeft = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.22, 0.1), tailMat);
-  tailLeft.position.set(-0.64, 0.72, 2.16);
-  const tailRight = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.22, 0.1), tailMat);
-  tailRight.position.set(0.64, 0.72, 2.16);
-  group.add(tailLeft, tailRight);
-
-  const headLeft = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.18, 0.1), headMat);
-  headLeft.position.set(-0.64, 0.66, -2.16);
-  const headRight = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.18, 0.1), headMat);
-  headRight.position.set(0.64, 0.66, -2.16);
-  group.add(headLeft, headRight);
-
-  // 4 blocky wheels
-  const wheelGeo = new THREE.CylinderGeometry(0.38, 0.38, 0.32, 6);
-  wheelGeo.rotateZ(Math.PI / 2);
-  const wheelOffsets = [
-    [-1.02, 0.38, -1.32],
-    [1.02, 0.38, -1.32],
-    [-1.02, 0.38, 1.32],
-    [1.02, 0.38, 1.32],
-  ];
-  for (const [wx, wy, wz] of wheelOffsets) {
-    const w = new THREE.Mesh(wheelGeo, tireMat);
-    w.position.set(wx, wy, wz);
-    group.add(w);
-  }
-
-  return group;
-}
-
-export function createRivalManager(scene, track) {
   const rivals = [];
   const particles = [];
 
   const fireMat = createPsxMaterial({ color: 0xff9d26, emissive: 0xcc4400 });
-  const smokeMat = createPsxMaterial({ color: 0x3a3538 });
+  const smokeMat = createPsxMaterial({ color: 0x2a2628 });
   const sparkMat = createPsxMaterial({ color: 0xffe478, emissive: 0xb8860b });
-  const cubeGeo = new THREE.BoxGeometry(0.45, 0.45, 0.45);
+  const muzzleMat = createPsxMaterial({ color: 0xfff3a1, emissive: 0xff8800 });
+  const cubeGeo = new THREE.BoxGeometry(0.48, 0.48, 0.48);
 
-  function spawnBurst(worldPos, count, isFire) {
-    for (let i = 0; i < count; i++) {
-      const mat = isFire ? (i % 2 === 0 ? fireMat : smokeMat) : sparkMat;
+  function spawnBurst(worldPos, burstCount, mode = 'spark') {
+    for (let i = 0; i < burstCount; i++) {
+      const mat =
+        mode === 'fire'
+          ? i % 2 === 0
+            ? fireMat
+            : smokeMat
+          : mode === 'muzzle'
+          ? muzzleMat
+          : sparkMat;
       const p = new THREE.Mesh(cubeGeo, mat);
       p.position.copy(worldPos);
-      p.position.y += 0.7 + Math.random() * 0.6;
-      const scale = isFire ? 0.8 + Math.random() * 1.1 : 0.45 + Math.random() * 0.4;
+      p.position.y += mode === 'muzzle' ? 1.15 : 0.75 + Math.random() * 0.6;
+      const scale =
+        mode === 'fire' ? 0.9 + Math.random() * 1.2 : mode === 'muzzle' ? 0.65 : 0.45 + Math.random() * 0.4;
       p.scale.setScalar(scale);
-      scene.add(p);
+      group.add(p);
       particles.push({
         mesh: p,
-        vel: new THREE.Vector3(
-          (Math.random() - 0.5) * 12,
-          3.5 + Math.random() * 8,
-          (Math.random() - 0.5) * 12
-        ),
-        life: 0.45 + Math.random() * 0.45,
+        vel:
+          mode === 'muzzle'
+            ? new THREE.Vector3((Math.random() - 0.5) * 3, 2, (Math.random() - 0.5) * 3)
+            : new THREE.Vector3(
+                (Math.random() - 0.5) * 13,
+                4.0 + Math.random() * 9,
+                (Math.random() - 0.5) * 13
+              ),
+        life: mode === 'muzzle' ? 0.14 : 0.5 + Math.random() * 0.5,
+        gravity: mode === 'fire' ? -2.5 : 10.5, // Smoke rises!
       });
     }
   }
 
-  RIVAL_SPECS.forEach((spec, i) => {
-    const mesh = createRivalMesh(spec);
-    scene.add(mesh);
-    // Stagger grid ahead of player (player starts at s = 0.985, totalProgress = -0.015)
-    const startOffset = -0.008 + (5 - i) * 0.0065;
-    const s = ((startOffset % 1) + 1) % 1;
+  const activeRoster = RIVAL_ROSTER.slice(0, count);
+  const lateralSpread = track.isOpenWorld ? 18.0 : 6.2;
+
+  activeRoster.forEach((entry, i) => {
+    const carSpec = CARS[entry.carKey] || CARS.coupe;
+    const mesh = buildVehicle3D(carSpec, entry.parts, entry.paint);
+    group.add(mesh);
+
+    const startOffset = -0.006 + (count - i) * 0.0065;
+    const s = (((startOffset % 1) + 1) % 1);
+    const startLat = (i % 2 === 0 ? 1 : -1) * (3.4 + (i % 3) * (track.isOpenWorld ? 3.5 : 1.1));
+
     rivals.push({
       id: i,
-      name: spec.name,
+      name: entry.name,
       mesh,
       s,
       totalProgress: startOffset,
-      lateral: i % 2 === 0 ? 3.1 : -3.1,
-      targetLateral: spec.lanePref,
-      baseSpeed: spec.baseSpeed,
+      lateral: startLat,
+      targetLateral: startLat,
+      baseSpeed: entry.baseSpeed + (track.isOpenWorld ? 2.5 : 0),
       speed: 0,
-      hp: 2,
-      wrecked: false,
-      wreckTimer: 0,
+      hp: entry.maxHp,
+      maxHp: entry.maxHp,
+      eliminated: false,
       spinAngle: 0,
-      laneTimer: 1.5 + i * 0.7,
+      spinVel: 0,
+      aggroTimer: 0,
+      shotCooldown: 1.8 + Math.random() * 1.4,
+      bumpCooldown: 0,
+      laneTimer: 1.4 + i * 0.6,
       smokeAccumulator: 0,
       worldPos: new THREE.Vector3(),
-      hitFlash: 0,
     });
   });
-
-  function resetRivals() {
-    rivals.forEach((r, i) => {
-      const startOffset = -0.008 + (5 - i) * 0.0065;
-      r.s = ((startOffset % 1) + 1) % 1;
-      r.totalProgress = startOffset;
-      r.lateral = i % 2 === 0 ? 3.1 : -3.1;
-      r.targetLateral = RIVAL_SPECS[i].lanePref;
-      r.speed = 0;
-      r.hp = 2;
-      r.wrecked = false;
-      r.wreckTimer = 0;
-      r.spinAngle = 0;
-      r.mesh.rotation.set(0, 0, 0);
-      syncRivalTransform(r);
-    });
-  }
 
   function syncRivalTransform(r) {
     const smp = track.sampleTrack(r.s);
@@ -162,116 +142,190 @@ export function createRivalManager(scene, track) {
     r.mesh.position.copy(r.worldPos);
     const roadYaw = Math.atan2(-smp.flatTan.x, -smp.flatTan.z);
     r.mesh.rotation.set(0, roadYaw + r.spinAngle, 0);
-    if (r.wrecked) {
-      r.mesh.rotation.z = Math.sin(r.spinAngle * 2) * 0.22;
+    if (r.eliminated) {
+      r.mesh.rotation.z = 0.16;
     }
   }
 
-  function update(dt, playerCar, raceActive) {
+  rivals.forEach(syncRivalTransform);
+
+  function update(dt, playerCar, playerStats, raceActive) {
     let playerBumped = false;
+    let enemyShotSide = null; // 'left' | 'right' | null
+    let enemyShotDamage = 0;
+    let ramWreckedRival = null;
+
     const playerSmp = track.sampleTrack(playerCar.s);
     const playerWorldPos = playerSmp.pos.clone().addScaledVector(playerSmp.right, playerCar.lateral);
 
+    let threatLeft = false;
+    let threatRight = false;
+
     for (const r of rivals) {
+      r.bumpCooldown = Math.max(0, r.bumpCooldown - dt);
+
+      if (r.eliminated) {
+        // Permanent wreck: spins to a halt on shoulder/flats and burns for the whole race
+        if (r.speed > 0.2) {
+          r.speed = Math.max(0, r.speed - 24 * dt);
+          r.spinAngle += r.spinVel * dt;
+          r.spinVel *= Math.max(0, 1 - dt * 1.8);
+          const shoulder = track.isOpenWorld
+            ? r.lateral >= 0
+              ? 22
+              : -22
+            : r.lateral >= 0
+            ? 9.6
+            : -9.6;
+          r.lateral += (shoulder - r.lateral) * Math.min(1, dt * 1.8);
+          const ds = (r.speed * dt) / track.totalLength;
+          r.s = (((r.s + ds) % 1) + 1) % 1;
+        }
+        r.smokeAccumulator += dt;
+        if (r.smokeAccumulator > 0.16) {
+          r.smokeAccumulator = 0;
+          spawnBurst(r.worldPos, 1, 'fire');
+        }
+        syncRivalTransform(r);
+        continue;
+      }
+
       if (raceActive) {
-        if (r.wrecked) {
-          r.wreckTimer -= dt;
-          r.speed = Math.max(0, r.speed - 22 * dt);
-          r.spinAngle += 9.5 * dt;
-          // Slide wrecked hull toward nearest road edge so lane stays passable
-          const edgeTarget = r.lateral >= 0 ? 8.2 : -8.2;
-          r.lateral += (edgeTarget - r.lateral) * Math.min(1, dt * 2.5);
+        r.aggroTimer = Math.max(0, r.aggroTimer - dt);
 
-          r.smokeAccumulator += dt;
-          if (r.smokeAccumulator > 0.09) {
-            r.smokeAccumulator = 0;
-            spawnBurst(r.worldPos, 2, true);
+        const gapProgress = playerCar.totalProgress - r.totalProgress;
+        const longMeters = gapProgress * track.totalLength;
+
+        // Proximity door-to-door check for side-window indicators & natural late-race rivalry
+        if (Math.abs(longMeters) < 16) {
+          if (r.lateral < playerCar.lateral - 1.2) threatLeft = true;
+          else if (r.lateral > playerCar.lateral + 1.2) threatRight = true;
+          if (playerCar.lap >= 2 && Math.abs(longMeters) < 8 && r.aggroTimer <= 0) {
+            r.aggroTimer = 4.5;
           }
+        }
 
-          if (r.wreckTimer <= 0) {
-            r.wrecked = false;
-            r.hp = 2;
-            r.spinAngle = 0;
-            r.speed = r.baseSpeed * 0.65;
+        let rubber = 1.0;
+        if (gapProgress > 0.06) rubber = 1.15;
+        else if (gapProgress < -0.09) rubber = 0.88;
+
+        const smp = track.sampleTrack(r.s);
+        const cornerSlow = Math.abs(smp.curvature) > 0.012 ? 0.85 : 1.0;
+        const dmgSlow = r.hp < r.maxHp * 0.45 ? 0.9 : 1.0;
+        const desiredSpeed = r.baseSpeed * rubber * cornerSlow * dmgSlow;
+
+        if (r.speed < desiredSpeed) {
+          r.speed = Math.min(desiredSpeed, r.speed + 18.5 * dt);
+        } else {
+          r.speed = Math.max(desiredSpeed, r.speed - 15.0 * dt);
+        }
+
+        // AI Lateral Line + Hostile Retaliation (Ramming & Window Gunfire!)
+        if (r.aggroTimer > 0 && Math.abs(longMeters) < 28) {
+          // Hostile rival swerves toward player's door to ram or line up a window shot!
+          const sideOffset = r.lateral < playerCar.lateral ? -2.3 : 2.3;
+          r.targetLateral = playerCar.lateral + (Math.abs(longMeters) < 6 ? sideOffset * 0.35 : sideOffset);
+
+          r.shotCooldown -= dt;
+          const dist3D = r.worldPos.distanceTo(playerWorldPos);
+          if (r.shotCooldown <= 0 && dist3D < 32) {
+            r.shotCooldown = 1.75 + Math.random() * 1.2;
+            const winPos = r.worldPos.clone();
+            winPos.x += smp.right.x * (r.lateral < playerCar.lateral ? 1.0 : -1.0);
+            spawnBurst(winPos, 3, 'muzzle');
+            enemyShotSide = r.lateral < playerCar.lateral ? 'left' : 'right';
+            const armorMitigation = playerStats.parts.armor === 2 ? 0.62 : playerStats.parts.armor === 1 ? 0.8 : 1.0;
+            enemyShotDamage += Math.round(7.5 * armorMitigation);
           }
         } else {
-          // Mild rubber-banding keeps rivals in exciting shotgun & overtaking range
-          const gap = playerCar.totalProgress - r.totalProgress;
-          let rubber = 1.0;
-          if (gap > 0.08) rubber = 1.14;
-          else if (gap < -0.10) rubber = 0.89;
-
-          const smp = track.sampleTrack(r.s);
-          const cornerSlow = Math.abs(smp.curvature) > 0.012 ? 0.84 : 1.0;
-          const damageFactor = r.hp === 1 ? 0.86 : 1.0;
-          const desiredSpeed = r.baseSpeed * rubber * cornerSlow * damageFactor;
-
-          if (r.speed < desiredSpeed) {
-            r.speed = Math.min(desiredSpeed, r.speed + 19.5 * dt);
-          } else {
-            r.speed = Math.max(desiredSpeed, r.speed - 16.0 * dt);
-          }
-
           r.laneTimer -= dt;
           if (r.laneTimer <= 0) {
-            r.laneTimer = 2.0 + Math.random() * 2.6;
-            r.targetLateral = (Math.random() - 0.5) * 11.5;
+            r.laneTimer = 1.9 + Math.random() * 2.4;
+            r.targetLateral = (Math.random() - 0.5) * 2 * lateralSpread;
           }
-          r.lateral += (r.targetLateral - r.lateral) * Math.min(1, dt * 1.4);
+        }
 
-          if (r.hp === 1) {
-            r.smokeAccumulator += dt;
-            if (r.smokeAccumulator > 0.14) {
-              r.smokeAccumulator = 0;
-              spawnBurst(r.worldPos, 1, false);
-            }
+        r.lateral += (r.targetLateral - r.lateral) * Math.min(1, dt * 1.65);
+
+        if (r.hp < r.maxHp * 0.6) {
+          r.smokeAccumulator += dt;
+          if (r.smokeAccumulator > 0.18) {
+            r.smokeAccumulator = 0;
+            spawnBurst(r.worldPos, 1, 'spark');
           }
         }
 
         const ds = (r.speed * dt) / track.totalLength;
-        r.s = ((r.s + ds) % 1 + 1) % 1;
+        r.s = (((r.s + ds) % 1) + 1) % 1;
         r.totalProgress += ds;
       }
 
       syncRivalTransform(r);
 
-      // Car-to-car bump check with player (rivals jostle & trade paint, never shoot)
-      if (raceActive && !r.wrecked) {
+      // Car-to-car collision & mutual ramming combat!
+      if (raceActive) {
         const distSq = r.worldPos.distanceToSquared(playerWorldPos);
-        if (distSq < 9.2) {
+        if (distSq < 9.6) {
           const pushSign = playerCar.lateral >= r.lateral ? 1 : -1;
-          playerCar.lateral += pushSign * 14.5 * dt;
-          r.lateral -= pushSign * 10.0 * dt;
-          if (playerCar.speed > r.speed + 4) {
-            playerCar.speed *= 0.92;
-            r.speed += 3;
+          playerCar.lateral += pushSign * 14.0 * dt;
+          r.lateral -= pushSign * 12.0 * dt;
+
+          if (r.bumpCooldown <= 0) {
+            r.bumpCooldown = 0.42;
+            r.aggroTimer = Math.max(r.aggroTimer, 11.0);
+            spawnBurst(r.worldPos, 5, 'spark');
+            playerBumped = true;
+
+            // Player ramming damage to rival (deadly in V8 Interceptor with Blower active!)
+            const blowerBonus = playerCar.blowerActive ? 1.55 : 1.0;
+            const ramToRival = Math.round(14 * playerStats.ramMult * blowerBonus);
+            r.hp -= ramToRival;
+
+            // Rival ramming damage to player armor
+            const armorFactor = playerStats.parts.armor >= 1 ? 0.65 : 1.0;
+            playerCar.armor = Math.max(0, playerCar.armor - Math.round(5.5 * armorFactor));
+
+            if (r.hp <= 0 && !r.eliminated) {
+              eliminateRival(r);
+              ramWreckedRival = r.name;
+            }
           }
-          spawnBurst(r.worldPos, 3, false);
-          playerBumped = true;
         }
       }
     }
 
-    // Update debris/smoke/fire cubes
     for (let i = particles.length - 1; i >= 0; i--) {
       const p = particles[i];
       p.life -= dt;
       if (p.life <= 0) {
-        scene.remove(p.mesh);
+        group.remove(p.mesh);
         particles.splice(i, 1);
         continue;
       }
       p.mesh.position.addScaledVector(p.vel, dt);
-      p.vel.y -= 9.5 * dt;
+      p.vel.y -= p.gravity * dt;
       p.mesh.rotation.x += 5 * dt;
       p.mesh.rotation.y += 4 * dt;
     }
 
-    return { playerBumped };
+    return {
+      playerBumped,
+      enemyShotSide,
+      enemyShotDamage,
+      ramWreckedRival,
+      threatLeft,
+      threatRight,
+    };
   }
 
-  // Test buckshot cone from camera through normalized screen point (ndcX, ndcY)
-  function fireBuckshotAt(camera, ndcX, ndcY) {
+  function eliminateRival(r) {
+    r.eliminated = true;
+    r.hp = 0;
+    r.spinVel = (Math.random() > 0.5 ? 1 : -1) * 11.5;
+    spawnBurst(r.worldPos, 20, 'fire');
+  }
+
+  function fireWeaponAt(camera, ndcX, ndcY, gunStats) {
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera);
     const origin = raycaster.ray.origin;
@@ -281,18 +335,18 @@ export function createRivalManager(scene, track) {
     let bestDist = Infinity;
 
     for (const r of rivals) {
-      if (r.wrecked) continue;
+      if (r.eliminated) continue;
       const targetCenter = r.worldPos.clone();
       targetCenter.y += 0.95;
 
       const toTarget = targetCenter.sub(origin);
       const along = toTarget.dot(dir);
-      if (along < 1.5 || along > 72) continue;
+      if (along < 1.2 || along > gunStats.maxRange) continue;
 
       const closestOnRay = dir.clone().multiplyScalar(along);
       const perpDist = toTarget.distanceTo(closestOnRay);
-      // Sawed-off buckshot spread widens with distance
-      const spreadRadius = 1.75 + along * 0.088;
+      const spreadRadius =
+        gunStats.spec.spreadBase + gunStats.spreadBonus + along * gunStats.spec.spreadSlope;
 
       if (perpDist <= spreadRadius && along < bestDist) {
         bestDist = along;
@@ -304,38 +358,50 @@ export function createRivalManager(scene, track) {
       return { hit: false, wrecked: false, rivalName: null };
     }
 
-    // Close blast (< 30m) wrecks in 1 shot; mid-range (30m..72m) wrecks in 2 hits
-    const dmg = bestDist <= 30 ? 2 : 1;
+    // Provoke target & nearby rivals to shoot/ram back!
+    bestRival.aggroTimer = 16.0;
+    for (const other of rivals) {
+      if (!other.eliminated && other.worldPos.distanceTo(bestRival.worldPos) < 22) {
+        other.aggroTimer = Math.max(other.aggroTimer, 7.5);
+      }
+    }
+
+    const dmg = bestDist <= gunStats.closeRange ? gunStats.damageClose : gunStats.damageMid;
     bestRival.hp -= dmg;
 
     if (bestRival.hp <= 0) {
-      bestRival.wrecked = true;
-      bestRival.wreckTimer = 4.8;
-      spawnBurst(bestRival.worldPos, 16, true);
+      eliminateRival(bestRival);
       return { hit: true, wrecked: true, rivalName: bestRival.name };
     }
 
-    bestRival.speed *= 0.74;
-    bestRival.lateral += (Math.random() > 0.5 ? 1 : -1) * 2.1;
-    spawnBurst(bestRival.worldPos, 8, false);
+    // Revolver & Sawed-off shove hit rivals sideways
+    const knock = gunStats.spec.id === 'revolver' || gunStats.spec.id === 'sawed_off' ? 2.4 : 0.7;
+    bestRival.speed *= 0.92;
+    bestRival.lateral += (Math.random() > 0.5 ? 1 : -1) * knock;
+    spawnBurst(bestRival.worldPos, 6, 'spark');
     return { hit: true, wrecked: false, rivalName: bestRival.name };
+  }
+
+  function getAliveCount() {
+    let alive = 0;
+    for (const r of rivals) if (!r.eliminated) alive++;
+    return alive;
   }
 
   function getPlayerRank(playerProgress) {
     let ahead = 0;
     for (const r of rivals) {
-      if (r.totalProgress > playerProgress) ahead++;
+      if (!r.eliminated && r.totalProgress > playerProgress) ahead++;
     }
     return ahead + 1;
   }
 
-  resetRivals();
-
   return {
     rivals,
-    resetRivals,
     update,
-    fireBuckshotAt,
+    fireWeaponAt,
+    getAliveCount,
     getPlayerRank,
+    dispose: () => scene.remove(group),
   };
 }

@@ -3,137 +3,216 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
-    <title>CLUTCH &amp; BUCKSHOT | One-Hand PSX Combat Racer</title>
+    <title>CLUTCH &amp; BUCKSHOT | PSX Drive-By Combat Racer</title>
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <main class="cabinet" id="app">
-      <header class="topbar" aria-label="Game controls">
-        <div class="brand">
-          <span class="brand-title">CLUTCH &amp; BUCKSHOT</span>
-          <span class="brand-sub">1-HAND MOUSE MULTITASK RACER</span>
-        </div>
-        <div class="topbar-actions">
-          <button type="button" id="btn-help" class="ctrl-btn" aria-expanded="false" aria-controls="panel-help">
-            CABIN MAP
-          </button>
-          <button type="button" id="btn-mute" class="ctrl-btn" aria-pressed="false">
-            AUDIO: ON
-          </button>
-          <button type="button" id="btn-pause" class="ctrl-btn" disabled>
-            PAUSE
-          </button>
-        </div>
-      </header>
+    <main class="stage" id="app">
+      <div class="viewport" id="viewport">
+        <canvas id="gl-canvas" aria-hidden="true"></canvas>
+        <canvas
+          id="cockpit-canvas"
+          aria-label="Interactive car cockpit. Use mouse for wheel, H-shifter, nitro, and guns. Hold A or D to look out side windows."
+        ></canvas>
 
-      <section class="viewport-shell" aria-label="Race cockpit viewport">
-        <div class="viewport" id="viewport">
-          <canvas id="gl-canvas" aria-hidden="true"></canvas>
-          <canvas id="cockpit-canvas" aria-label="Interactive car cockpit. Use mouse to operate pedals, wheel, nitro handle, and visor shotgun."></canvas>
+        <!-- Compact corner settings button (replaces top bar) -->
+        <button
+          type="button"
+          id="btn-corner-settings"
+          class="corner-btn"
+          aria-label="Open settings and pause menu"
+          title="Settings / Pause (Esc)"
+        >
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <path
+              d="M8.5 2h3l.4 2.1 1.9.8 1.8-1.2 2.1 2.1-1.2 1.8.8 1.9L19.4 10v3l-2.1.4-.8 1.9 1.2 1.8-2.1 2.1-1.8-1.2-1.9.8L11.5 21h-3l-.4-2.1-1.9-.8-1.8 1.2-2.1-2.1 1.2-1.8-.8-1.9L.6 13v-3l2.1-.4.8-1.9-1.2-1.8 2.1-2.1 1.8 1.2 1.9-.8L8.5 2z"
+              transform="translate(0 -1.5) scale(0.95)"
+              stroke="currentColor"
+              stroke-width="1.8"
+            />
+            <circle cx="9.5" cy="10" r="2.8" stroke="currentColor" stroke-width="1.8" />
+          </svg>
+        </button>
 
-          <!-- Loading state -->
-          <div class="overlay" id="screen-loading" role="status" aria-live="polite">
-            <div class="panel">
-              <h1 class="panel-title">BUILDING CIRCUIT</h1>
-              <p class="panel-copy" id="loading-status">Generating PSX track geometry and cabin sprites...</p>
-            </div>
+        <!-- Loading state -->
+        <div class="overlay" id="screen-loading" role="status" aria-live="polite">
+          <div class="modal-panel">
+            <h1 class="panel-title">LOADING GARAGE</h1>
+            <p class="panel-copy">Building PSX circuits, vehicles, and weapon sprites...</p>
           </div>
+        </div>
 
-          <!-- Error state -->
-          <div class="overlay hidden" id="screen-error" role="alert">
-            <div class="panel panel-danger">
-              <h1 class="panel-title">RENDERER ERROR</h1>
-              <p class="panel-copy" id="error-message">WebGL failed to initialize in this browser.</p>
-              <button type="button" id="btn-retry" class="cta-btn">RELOAD GAME</button>
-            </div>
+        <!-- Error state -->
+        <div class="overlay hidden" id="screen-error" role="alert">
+          <div class="modal-panel panel-danger">
+            <h1 class="panel-title">RENDERER ERROR</h1>
+            <p class="panel-copy" id="error-message">WebGL failed to initialize in this browser.</p>
+            <button type="button" id="btn-retry" class="cta-btn">RELOAD GAME</button>
           </div>
+        </div>
 
-          <!-- Title / Briefing state -->
-          <div class="overlay hidden" id="screen-start" role="dialog" aria-modal="true" aria-labelledby="start-heading">
-            <div class="panel">
-              <h1 class="panel-title" id="start-heading">ONE HAND. FOUR JOBS.</h1>
-              <p class="panel-lead">
-                Survive 3 laps against 5 rival cars using only your mouse hand. Every action leaves the other stations unattended.
+        <!-- MAIN MENU & GARAGE HUB (Asymmetric drawer over live 3D PSX Showroom Turntable) -->
+        <section class="hub-layer hidden" id="screen-hub" aria-label="Main Menu and Garage">
+          <div class="hub-drawer">
+            <header class="hub-header">
+              <div class="hub-title-row">
+                <h1 class="hub-logo">CLUTCH &amp; BUCKSHOT</h1>
+                <div class="cash-readout" id="hub-cash" aria-live="polite">$350</div>
+              </div>
+              <p class="hub-loadout-line" id="hub-loadout-summary">
+                CAR: 86 KURUMA COUPE | GUN: SAWED-OFF 12G
               </p>
-              <dl class="station-list">
-                <div class="station-row">
-                  <dt>FOOTWELL PEDALS (BOTTOM LEFT)</dt>
-                  <dd>Hold GAS to build speed. Let go and coast while your hand moves elsewhere. Hold BRK for sharp turns.</dd>
-                </div>
-                <div class="station-row">
-                  <dt>STEERING WHEEL (LEFT)</dt>
-                  <dd>Grab and rotate to corner. When released, the wheel slowly self-centers while road bumps tug your line.</dd>
-                </div>
-                <div class="station-row">
-                  <dt>NITRO T-HANDLE (RIGHT)</dt>
-                  <dd>Drag all the way down to trigger boost. Pull repeatedly to stack up to 3X speed with heavy cabin shake.</dd>
-                </div>
-                <div class="station-row">
-                  <dt>VISOR SHOTGUN (TOP RIGHT)</dt>
-                  <dd>Click holster to equip, Left-Click road to fire. When empty, click holster to dock open, drag 2 spent hulls out, drag 2 fresh shells from strap into breech, and click gun to snap shut.</dd>
-                </div>
-              </dl>
-              <div class="panel-actions">
-                <button type="button" id="btn-start" class="cta-btn">IGNITION: START 3-LAP RACE</button>
+              <nav class="hub-tabs" role="tablist" aria-label="Garage sections">
+                <button type="button" role="tab" class="hub-tab active" data-tab="race" aria-selected="true">
+                  RACE
+                </button>
+                <button type="button" role="tab" class="hub-tab" data-tab="showroom" aria-selected="false">
+                  SHOWROOM
+                </button>
+                <button type="button" role="tab" class="hub-tab" data-tab="mechanic" aria-selected="false">
+                  MECHANIC
+                </button>
+                <button type="button" role="tab" class="hub-tab" data-tab="gunshop" aria-selected="false">
+                  GUN SHOP
+                </button>
+              </nav>
+            </header>
+
+            <!-- TAB 1: RACE SELECT -->
+            <div class="hub-body" id="tab-race" role="tabpanel">
+              <div class="track-list" id="track-list"></div>
+              <div class="controls-card">
+                <h2 class="sub-heading">ONE HAND + SIDE WINDOWS</h2>
+                <ul class="compact-list">
+                  <li><strong>Auto-Drive + 1-6 H-Gate:</strong> Car accelerates automatically. Shift up 1-6 for speed; downshift to engine-brake into turns; R to reverse.</li>
+                  <li><strong>Side Drive-Bys:</strong> Hold <kbd>A</kbd>/<kbd>Q</kbd> for Left Window or <kbd>D</kbd>/<kbd>E</kbd> for Right Window.</li>
+                  <li><strong>Combat Rules:</strong> Wrecked cars stay out permanently. Provoked rivals ram and shoot back!</li>
+                </ul>
               </div>
+              <button type="button" id="btn-launch-race" class="cta-btn full-width">
+                ENTER CIRCUIT: START RACE
+              </button>
+            </div>
+
+            <!-- TAB 2: VEHICLE SHOWROOM -->
+            <div class="hub-body hidden" id="tab-showroom" role="tabpanel">
+              <div class="item-selector" id="showroom-car-list"></div>
+              <div class="spec-box" id="showroom-detail"></div>
+            </div>
+
+            <!-- TAB 3: MECHANIC GARAGE (VISIBLE CAR UPGRADES) -->
+            <div class="hub-body hidden" id="tab-mechanic" role="tabpanel">
+              <p class="shop-note">
+                Installed parts visibly bolt onto your 3D car and inside your first-person cabin.
+              </p>
+              <div class="upgrade-stack" id="mechanic-upgrades"></div>
+            </div>
+
+            <!-- TAB 4: GUN SHOP (GUNS & VISIBLE WEAPON UPGRADES) -->
+            <div class="hub-body hidden" id="tab-gunshop" role="tabpanel">
+              <div class="workbench-wrap">
+                <canvas
+                  id="gun-preview-canvas"
+                  width="260"
+                  height="96"
+                  aria-label="Live 2D pixel weapon workbench preview"
+                ></canvas>
+              </div>
+              <div class="item-selector" id="gunshop-list"></div>
+              <div class="spec-box" id="gunshop-detail"></div>
+              <div class="upgrade-stack" id="gunshop-upgrades"></div>
             </div>
           </div>
 
-          <!-- Cabin Map / Help Drawer -->
-          <div class="overlay hidden" id="panel-help" role="dialog" aria-modal="true" aria-labelledby="help-heading">
-            <div class="panel">
-              <h2 class="panel-title" id="help-heading">CABIN OPERATING MANUAL</h2>
-              <ul class="manual-list">
-                <li><strong>Drive vs. Shoot:</strong> While holding the sawed-off shotgun, your hand cannot touch the wheel, pedals, or nitro.</li>
-                <li><strong>Reloading Under Fire:</strong> Once docked open on the sun visor, your hand is free between shell drags to correct steering or tap gas.</li>
-                <li><strong>Shotgun Range:</strong> Point-blank blasts wreck rivals in 1 shot. Mid-range blasts smoke them first, then wreck on the 2nd hit.</li>
-                <li><strong>Nitro Risk:</strong> Nitro pressure regenerates automatically. 3X stack delivers maximum top speed and violent road drift.</li>
-                <li><strong>Shortcuts:</strong> Press <kbd>Esc</kbd> to pause or close dialogs, <kbd>M</kbd> to toggle sound.</li>
-              </ul>
-              <div class="panel-actions">
-                <button type="button" id="btn-close-help" class="cta-btn">CLOSE MANUAL</button>
-              </div>
-            </div>
+          <!-- Turntable Floating Car Badge on Right -->
+          <div class="turntable-caption" id="turntable-caption" aria-hidden="true">
+            SHOWROOM TURNTABLE
           </div>
+        </section>
 
-          <!-- Pause state -->
-          <div class="overlay hidden" id="screen-pause" role="dialog" aria-modal="true" aria-labelledby="pause-heading">
-            <div class="panel">
-              <h2 class="panel-title" id="pause-heading">RACE PAUSED</h2>
-              <p class="panel-copy" id="pause-stats">Lap 1 of 3</p>
-              <div class="panel-actions">
-                <button type="button" id="btn-resume" class="cta-btn">RESUME RACE</button>
-                <button type="button" id="btn-restart-pause" class="ctrl-btn">RESTART CIRCUIT</button>
-              </div>
+        <!-- SETTINGS / PAUSE MODAL -->
+        <div
+          class="overlay hidden"
+          id="screen-settings"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="settings-heading"
+        >
+          <div class="modal-panel">
+            <h2 class="panel-title" id="settings-heading">SETTINGS &amp; CONTROLS</h2>
+            <p class="panel-copy" id="pause-race-status"></p>
+
+            <div class="settings-grid">
+              <button type="button" id="btn-toggle-audio" class="ctrl-btn" aria-pressed="false">
+                AUDIO: ON
+              </button>
+              <button type="button" id="btn-reset-save" class="ctrl-btn danger-outline">
+                RESET PROGRESS
+              </button>
             </div>
-          </div>
 
-          <!-- Finish / Results state -->
-          <div class="overlay hidden" id="screen-finish" role="dialog" aria-modal="true" aria-labelledby="finish-heading">
-            <div class="panel">
-              <h2 class="panel-title" id="finish-heading">CHECKERED FLAG</h2>
-              <p class="result-rank" id="finish-rank">1ST PLACE</p>
-              <dl class="result-metrics">
-                <div>
-                  <dt>TOTAL TIME</dt>
-                  <dd id="finish-time">00:00.00</dd>
-                </div>
-                <div>
-                  <dt>BEST LAP</dt>
-                  <dd id="finish-best">00:00.00</dd>
-                </div>
-                <div>
-                  <dt>RIVALS WRECKED</dt>
-                  <dd id="finish-wrecks">0</dd>
-                </div>
-              </dl>
-              <div class="panel-actions">
-                <button type="button" id="btn-race-again" class="cta-btn">RACE AGAIN</button>
+            <dl class="key-legend">
+              <div>
+                <dt>MOUSE (1 HAND)</dt>
+                <dd>Steer wheel, shift 1-6 H-gate, pull Nitro handle, draw/fire/reload visor guns.</dd>
               </div>
+              <div>
+                <dt>A / Q &amp; D / E</dt>
+                <dd>Hold to look out Left Driver Window or Right Passenger Window for drive-bys.</dd>
+              </div>
+              <div>
+                <dt>ESC / M</dt>
+                <dd>Toggle Settings/Pause menu (<kbd>Esc</kbd>) or Audio mute (<kbd>M</kbd>).</dd>
+              </div>
+            </dl>
+
+            <div class="panel-actions" id="settings-race-actions">
+              <button type="button" id="btn-resume" class="cta-btn">RESUME</button>
+              <button type="button" id="btn-restart-race" class="ctrl-btn">RESTART RACE</button>
+              <button type="button" id="btn-quit-hub" class="ctrl-btn">RETURN TO GARAGE</button>
             </div>
           </div>
         </div>
-      </section>
+
+        <!-- FINISH / PAYOUT MODAL -->
+        <div
+          class="overlay hidden"
+          id="screen-finish"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="finish-heading"
+        >
+          <div class="modal-panel">
+            <h2 class="panel-title" id="finish-heading">RACE COMPLETE</h2>
+            <p class="result-rank" id="finish-rank">1ST PLACE</p>
+            <p class="panel-copy" id="finish-reason"></p>
+            <dl class="result-metrics">
+              <div>
+                <dt>RACE TIME</dt>
+                <dd id="finish-time">00:00.00</dd>
+              </div>
+              <div>
+                <dt>FOES WRECKED</dt>
+                <dd id="finish-wrecks">0</dd>
+              </div>
+              <div>
+                <dt>CASH EARNED</dt>
+                <dd id="finish-payout">+$0</dd>
+              </div>
+              <div>
+                <dt>BANKROLL</dt>
+                <dd id="finish-bank">$0</dd>
+              </div>
+            </dl>
+            <div class="panel-actions">
+              <button type="button" id="btn-finish-garage" class="cta-btn">
+                GARAGE &amp; SHOPS
+              </button>
+              <button type="button" id="btn-race-again" class="ctrl-btn">RACE AGAIN</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </main>
     <script type="module" src="/src/main.js"></script>
   </body>
