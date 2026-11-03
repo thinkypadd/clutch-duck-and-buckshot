@@ -56,7 +56,6 @@ export class SoundEngine {
     this.oscA.start();
     this.oscB.start();
 
-    // Supercharger whine oscillator
     this.blowerOsc = this.ctx.createOscillator();
     this.blowerOsc.type = 'triangle';
     this.blowerOsc.frequency.value = 680;
@@ -66,7 +65,6 @@ export class SoundEngine {
     this.blowerGain.connect(this.master);
     this.blowerOsc.start();
 
-    // Curb / drift / sand loop
     const skidSrc = this.ctx.createBufferSource();
     skidSrc.buffer = this.noiseBuffer;
     skidSrc.loop = true;
@@ -104,6 +102,7 @@ export class SoundEngine {
     drifting,
     onCurb,
     offRoad,
+    airborne,
     active,
     carId,
   }) {
@@ -114,28 +113,40 @@ export class SoundEngine {
       return;
     }
 
-    const v8Deep = carId === 'muscle' || carId === 'truck' ? 0.82 : carId === 'rally' ? 1.15 : 1.0;
-    const baseFreq = (40 + rpm * 132 + nitroStacks * 20) * v8Deep;
+    const pitchScale =
+      carId === 'muscle' || carId === 'truck'
+        ? 0.8
+        : carId === 'junker'
+        ? 0.88
+        : carId === 'rotary' || carId === 'hyper'
+        ? 1.32
+        : carId === 'rally'
+        ? 1.15
+        : 1.0;
+
+    const baseFreq = (40 + rpm * 138 + nitroStacks * 22) * pitchScale;
     this.oscA.frequency.setTargetAtTime(baseFreq, t, 0.04);
     this.oscB.frequency.setTargetAtTime(baseFreq * 0.503, t, 0.04);
 
-    const cutoff = 220 + rpm * 820 + nitroStacks * 320;
+    const cutoff = 220 + rpm * 850 + nitroStacks * 320;
     this.engineFilter.frequency.setTargetAtTime(cutoff, t, 0.05);
     this.engineGain.gain.setTargetAtTime(0.15 + nitroStacks * 0.03, t, 0.05);
 
-    this.blowerOsc.frequency.setTargetAtTime(520 + rpm * 1150, t, 0.04);
-    this.blowerGain.gain.setTargetAtTime(blowerActive ? 0.09 : 0, t, 0.05);
+    this.blowerOsc.frequency.setTargetAtTime(520 + rpm * 1180, t, 0.04);
+    this.blowerGain.gain.setTargetAtTime(blowerActive ? 0.095 : 0, t, 0.05);
 
     let surfaceVol = 0;
-    if (drifting) {
-      this.skidFilter.frequency.setTargetAtTime(1420, t, 0.03);
-      surfaceVol = 0.16;
-    } else if (onCurb) {
-      this.skidFilter.frequency.setTargetAtTime(220, t, 0.03);
-      surfaceVol = 0.17;
-    } else if (offRoad) {
-      this.skidFilter.frequency.setTargetAtTime(360, t, 0.03);
-      surfaceVol = 0.11;
+    if (!airborne) {
+      if (drifting) {
+        this.skidFilter.frequency.setTargetAtTime(1420, t, 0.03);
+        surfaceVol = 0.16;
+      } else if (onCurb) {
+        this.skidFilter.frequency.setTargetAtTime(220, t, 0.03);
+        surfaceVol = 0.17;
+      } else if (offRoad) {
+        this.skidFilter.frequency.setTargetAtTime(360, t, 0.03);
+        surfaceVol = 0.11;
+      }
     }
     this.rumbleGain.gain.setTargetAtTime(surfaceVol, t, 0.04);
   }
@@ -156,6 +167,54 @@ export class SoundEngine {
     osc.stop(t + 0.08);
   }
 
+  playPanelHinge(open = true) {
+    if (!this.ctx || this.muted) return;
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(open ? 140 : 280, t);
+    osc.frequency.exponentialRampToValueAtTime(open ? 290 : 110, t + 0.14);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.18, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+    osc.connect(g);
+    g.connect(this.master);
+    osc.start(t);
+    osc.stop(t + 0.16);
+  }
+
+  playHydroJump() {
+    if (!this.ctx || this.muted) return;
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(110, t);
+    osc.frequency.exponentialRampToValueAtTime(520, t + 0.18);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.4, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+    osc.connect(g);
+    g.connect(this.master);
+    osc.start(t);
+    osc.stop(t + 0.23);
+  }
+
+  playTrunkDeploy(type = 'oil') {
+    if (!this.ctx || this.muted) return;
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    osc.type = type === 'mine' ? 'sine' : 'sawtooth';
+    osc.frequency.setValueAtTime(type === 'mine' ? 880 : 260, t);
+    osc.frequency.exponentialRampToValueAtTime(type === 'napalm' ? 120 : 480, t + 0.18);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.32, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+    osc.connect(g);
+    g.connect(this.master);
+    osc.start(t);
+    osc.stop(t + 0.21);
+  }
+
   playWeaponFire(gunId, suppressed = false) {
     if (!this.ctx || this.muted) return;
     const t = this.ctx.currentTime;
@@ -166,13 +225,30 @@ export class SoundEngine {
     filter.type = 'lowpass';
 
     const dur =
-      gunId === 'sawed_off' ? 0.38 : gunId === 'revolver' ? 0.3 : gunId === 'm1911' ? 0.18 : 0.11;
-    const startFreq = suppressed ? 900 : gunId === 'sawed_off' ? 2400 : 2900;
+      gunId === 'thumper'
+        ? 0.44
+        : gunId === 'sawed_off' || gunId === 'pump_shotgun'
+        ? 0.36
+        : gunId === 'lever_rifle' || gunId === 'revolver'
+        ? 0.28
+        : gunId === 'ak_shorty'
+        ? 0.16
+        : gunId === 'm1911'
+        ? 0.17
+        : 0.1;
+
+    const startFreq = suppressed
+      ? 920
+      : gunId === 'thumper'
+      ? 1150
+      : gunId === 'sawed_off' || gunId === 'pump_shotgun'
+      ? 2400
+      : 2950;
     filter.frequency.setValueAtTime(startFreq, t);
-    filter.frequency.exponentialRampToValueAtTime(160, t + dur);
+    filter.frequency.exponentialRampToValueAtTime(140, t + dur);
 
     const nGain = this.ctx.createGain();
-    const vol = suppressed ? 0.36 : gunId === 'smg' ? 0.48 : 0.88;
+    const vol = suppressed ? 0.35 : gunId === 'smg' ? 0.46 : 0.88;
     nGain.gain.setValueAtTime(vol, t);
     nGain.gain.exponentialRampToValueAtTime(0.001, t + dur);
 
@@ -184,16 +260,23 @@ export class SoundEngine {
 
     const sub = this.ctx.createOscillator();
     sub.type = 'triangle';
-    const subStart = gunId === 'sawed_off' ? 135 : gunId === 'revolver' ? 165 : 210;
+    const subStart =
+      gunId === 'thumper'
+        ? 190
+        : gunId === 'sawed_off' || gunId === 'pump_shotgun'
+        ? 135
+        : gunId === 'lever_rifle' || gunId === 'revolver'
+        ? 165
+        : 210;
     sub.frequency.setValueAtTime(subStart, t);
-    sub.frequency.exponentialRampToValueAtTime(38, t + dur * 0.7);
+    sub.frequency.exponentialRampToValueAtTime(36, t + dur * 0.75);
     const sGain = this.ctx.createGain();
-    sGain.gain.setValueAtTime(vol * 0.85, t);
-    sGain.gain.exponentialRampToValueAtTime(0.001, t + dur * 0.75);
+    sGain.gain.setValueAtTime(vol * 0.88, t);
+    sGain.gain.exponentialRampToValueAtTime(0.001, t + dur * 0.78);
     sub.connect(sGain);
     sGain.connect(this.master);
     sub.start(t);
-    sub.stop(t + dur * 0.8);
+    sub.stop(t + dur * 0.82);
   }
 
   playEnemyShot() {

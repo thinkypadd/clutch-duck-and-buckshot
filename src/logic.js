@@ -1,15 +1,38 @@
-import { getComputedCarStats, getComputedGunStats } from './catalog.js';
+import {
+  NITRO_STAGE_COLORS,
+  NITRO_STAGE_NAMES,
+  getComputedCarStats,
+  getComputedGunStats,
+} from './catalog.js';
 
 export const MAX_WHEEL_RAD = 2.2;
 export const NITRO_PULL_COST = 30;
 export const NITRO_STACK_DURATION = 5.4;
 
-// Normalized top speed fraction of car's 6th-gear ceiling for each gear 1..6
-const GEAR_MAX_FRAC = [0, 0.25, 0.43, 0.60, 0.75, 0.88, 1.0];
-const GEAR_MIN_FRAC = [0, 0.0, 0.16, 0.32, 0.48, 0.64, 0.78];
+// Dynamically compute [minFrac, maxFrac] for any gearbox with 3..8 forward gears!
+export function getGearBand(gear, maxGears = 5) {
+  const n = Math.max(3, Math.min(8, maxGears));
+  const g = Math.max(1, Math.min(n, gear));
+  // Smooth curve so low gears have crisp step spacing and top gear reaches 1.0
+  const maxFrac = Math.pow(g / n, 0.82);
+  const prevMax = g === 1 ? 0 : Math.pow((g - 1) / n, 0.82);
+  const minFrac = g === 1 ? 0 : prevMax * 0.78;
+  return { minFrac, maxFrac };
+}
+
+export function getNitroStageInfo(stacks) {
+  if (stacks <= 0) return { active: false, color: '#454c5c', name: 'OFF' };
+  const idx = Math.min(NITRO_STAGE_COLORS.length - 1, stacks - 1);
+  return {
+    active: true,
+    color: NITRO_STAGE_COLORS[idx],
+    name: NITRO_STAGE_NAMES[idx],
+  };
+}
 
 export function createCarState(carStats) {
-  const maxArmor = carStats ? carStats.maxArmor : 105;
+  const maxArmor = carStats ? carStats.maxArmor : 95;
+  const maxGears = carStats ? carStats.maxGears : 3;
   return {
     s: 0.985,
     lateral: -3.4,
@@ -17,14 +40,28 @@ export function createCarState(carStats) {
     speed: 0,
     wheelAngle: 0,
     wheelHeld: false,
-    gear: 1, // 1..6, 0 = Neutral ('N'), -1 = Reverse ('R')
+    gear: 1, // 1..maxGears, 0 = Neutral ('N'), -1 = Reverse ('R')
+    maxGears,
     rpm: 0.22,
     shiftLight: false,
     armor: maxArmor,
     maxArmor,
+    // Car gimmicks
+    chokeActive: false,
+    vcamActive: false,
     blowerActive: false,
-    blowerHeat: 0,
+    gimmickHeat: 0,
     driftHeld: false,
+    aeroSlipMode: false,
+    jumpY: 0,
+    jumpVel: 0,
+    jumpCooldown: 0,
+    backfireCooldown: 0,
+    backfireFlash: 0,
+    // Trunk countermeasure
+    trunkCooldown: 0,
+    trunkMaxCooldown: carStats ? carStats.trunkCooldownSec : 6.0,
+    // Race progress
     lap: 0,
     startedFirstLap: false,
     completedLaps: 0,
@@ -40,11 +77,13 @@ export function createCarState(carStats) {
 }
 
 export function createNitroState(carStats) {
+  const maxStacks = carStats ? carStats.maxNitroStacks : 0;
   return {
-    meter: 100,
+    installed: maxStacks > 0,
+    meter: maxStacks > 0 ? 100 : 0,
     stacks: 0,
-    maxStacks: carStats ? carStats.maxNitroStacks : 3,
-    regenMult: carStats ? carStats.nitroRegenMult : 1,
+    maxStacks,
+    regenMult: carStats ? carStats.nitroRegenMult : 0,
     durationBonus: carStats ? carStats.nitroDurationBonus : 0,
     stackTimer: 0,
     handlePos: 0,
@@ -56,8 +95,18 @@ export function createNitroState(carStats) {
 
 export function createSingleWeaponInstance(gunStats) {
   const id = gunStats.spec.id;
+  const rType = gunStats.spec.reloadType;
   const cap = gunStats.capacity;
-  const inst = {
+  const chambers =
+    rType === 'break_2'
+      ? ['live', 'live']
+      : rType === 'break_1'
+      ? ['live']
+      : rType === 'cylinder'
+      ? Array(6).fill('live')
+      : [];
+
+  return {
     id,
     stats: gunStats,
     mode: 'HOLSTERED_READY', // 'HOLSTERED_READY' | 'EQUIPPED' | 'HOLSTERED_OPEN'
@@ -67,20 +116,13 @@ export function createSingleWeaponInstance(gunStats) {
     recoil: 0,
     muzzleFlash: 0,
     holsterAlert: 0,
-    // Sawed-off & Revolver chamber states
-    chambers:
-      id === 'sawed_off'
-        ? ['live', 'live']
-        : id === 'revolver'
-        ? Array(6).fill('live')
-        : [],
-    // Mag + slide guns (M1911 & SMG): 'mag_spent' -> 'mag_out' -> 'mag_in' -> 'ready'
+    chambers,
+    // mag_slide: 'mag_spent' -> 'mag_out' -> 'mag_in' -> 'ready'
+    // tube_pump / lever_gate: 'loading_tube' -> 'ready_to_rack' -> 'ready'
     reloadStage: 'ready',
-    // Visor ammo pouch slots (infinite slow replenish so long races never softlock)
     pouchSlots: [true, true, true, true, true],
     pouchRefillTimer: 0,
   };
-  return inst;
 }
 
 export function createLoadoutState(save) {
@@ -109,14 +151,22 @@ export function getActiveWeapon(loadout) {
   return loadout.weapons[loadout.activeSlot];
 }
 
+function enterOpenReloadState(wep) {
+  wep.mode = 'HOLSTERED_OPEN';
+  const rType = wep.stats.spec.reloadType;
+  if (rType === 'mag_slide') {
+    wep.reloadStage = 'mag_spent';
+  } else if (rType === 'tube_pump' || rType === 'lever_gate') {
+    wep.reloadStage = wep.ammo >= wep.maxAmmo ? 'ready_to_rack' : 'loading_tube';
+  }
+}
+
 export function swapDualWeapon(loadout) {
   if (loadout.weapons.length < 2) return false;
   const cur = getActiveWeapon(loadout);
   if (cur.mode === 'EQUIPPED') {
-    cur.mode = cur.ammo === 0 ? 'HOLSTERED_OPEN' : 'HOLSTERED_READY';
-    if (cur.ammo === 0 && cur.stats.spec.reloadType === 'mag_slide' && cur.reloadStage === 'ready') {
-      cur.reloadStage = 'mag_spent';
-    }
+    if (cur.ammo === 0) enterOpenReloadState(cur);
+    else cur.mode = 'HOLSTERED_READY';
   }
   loadout.activeSlot = loadout.activeSlot === 0 ? 1 : 0;
   return true;
@@ -137,11 +187,11 @@ export function fireWeapon(wep) {
   if (wep.fireCooldown > 0) return { fired: false, dryFire: false, cooling: true };
 
   wep.ammo -= 1;
-  wep.fireCooldown = wep.stats.spec.fireInterval;
-  wep.recoil = 1.0;
+  wep.fireCooldown = wep.stats.fireInterval;
+  wep.recoil = 1.0 * wep.stats.recoilMult;
   wep.muzzleFlash = 1.0;
 
-  if (wep.id === 'sawed_off' || wep.id === 'revolver') {
+  if (wep.chambers.length > 0) {
     const idx = wep.chambers.indexOf('live');
     if (idx !== -1) wep.chambers[idx] = 'spent';
   }
@@ -160,10 +210,7 @@ export function holsterWeapon(wep) {
   if (wep.mode !== 'EQUIPPED') return false;
   wep.holsterAlert = 0;
   if (wep.ammo === 0) {
-    wep.mode = 'HOLSTERED_OPEN';
-    if (wep.stats.spec.reloadType === 'mag_slide' && wep.reloadStage === 'ready') {
-      wep.reloadStage = 'mag_spent';
-    }
+    enterOpenReloadState(wep);
   } else {
     wep.mode = 'HOLSTERED_READY';
   }
@@ -172,10 +219,7 @@ export function holsterWeapon(wep) {
 
 export function openWeaponForReload(wep) {
   if (wep.mode === 'HOLSTERED_READY' && wep.ammo < wep.maxAmmo) {
-    wep.mode = 'HOLSTERED_OPEN';
-    if (wep.stats.spec.reloadType === 'mag_slide') {
-      wep.reloadStage = 'mag_spent';
-    }
+    enterOpenReloadState(wep);
     return true;
   }
   if (wep.mode === 'EQUIPPED' && wep.ammo === 0) {
@@ -184,7 +228,6 @@ export function openWeaponForReload(wep) {
   return false;
 }
 
-// Sawed-off & Revolver chamber helpers
 export function countWeaponChambers(wep, state) {
   let c = 0;
   for (const ch of wep.chambers) if (ch === state) c++;
@@ -193,13 +236,14 @@ export function countWeaponChambers(wep, state) {
 
 export function ejectChamber(wep, index = -1) {
   if (wep.mode !== 'HOLSTERED_OPEN') return false;
-  if (wep.id === 'sawed_off') {
-    if (wep.chambers[index] !== 'spent') return false;
-    wep.chambers[index] = 'empty';
+  const rType = wep.stats.spec.reloadType;
+  if (rType === 'break_2' || rType === 'break_1') {
+    const idx = rType === 'break_1' ? 0 : index;
+    if (wep.chambers[idx] !== 'spent') return false;
+    wep.chambers[idx] = 'empty';
     return true;
   }
-  if (wep.id === 'revolver') {
-    // Revolver ejector rod dumps all spent casings at once
+  if (rType === 'cylinder') {
     let any = false;
     for (let i = 0; i < wep.chambers.length; i++) {
       if (wep.chambers[i] === 'spent') {
@@ -227,7 +271,7 @@ export function insertAmmoFromPouch(wep, pouchIndex) {
 
   const rType = wep.stats.spec.reloadType;
 
-  if (rType === 'break_2') {
+  if (rType === 'break_2' || rType === 'break_1') {
     const emptyIdx = wep.chambers.indexOf('empty');
     if (emptyIdx === -1) return { loaded: false };
     wep.pouchSlots[pouchIndex] = false;
@@ -243,14 +287,11 @@ export function insertAmmoFromPouch(wep, pouchIndex) {
     wep.pouchSlots[pouchIndex] = false;
 
     if (wep.stats.hasSpeedloader) {
-      // Speedloader drops all 6 rounds into the cylinder in one motion!
-      for (let i = 0; i < wep.chambers.length; i++) {
-        wep.chambers[i] = 'live';
-      }
+      for (let i = 0; i < wep.chambers.length; i++) wep.chambers[i] = 'live';
     } else {
-      // Hand-loading pairs of .357 cartridges (2 chambers per grab so 3 brisk pulls fill 6)
+      const perGrab = (wep.stats.parts.loader || 0) >= 1 ? 3 : 2;
       let filled = 0;
-      for (let i = 0; i < wep.chambers.length && filled < 2; i++) {
+      for (let i = 0; i < wep.chambers.length && filled < perGrab; i++) {
         if (wep.chambers[i] === 'empty') {
           wep.chambers[i] = 'live';
           filled++;
@@ -268,25 +309,42 @@ export function insertAmmoFromPouch(wep, pouchIndex) {
     return { loaded: true };
   }
 
+  if (rType === 'tube_pump' || rType === 'lever_gate') {
+    if (wep.ammo >= wep.maxAmmo) return { loaded: false };
+    wep.pouchSlots[pouchIndex] = false;
+    const perGrab = wep.stats.fastPackLoad ? wep.maxAmmo : (wep.stats.parts.loader || 0) >= 1 ? 4 : 3;
+    wep.ammo = Math.min(wep.maxAmmo, wep.ammo + perGrab);
+    if (wep.ammo >= wep.maxAmmo) {
+      wep.reloadStage = 'ready_to_rack';
+    }
+    return { loaded: true };
+  }
+
   return { loaded: false };
 }
 
 export function canFinishReload(wep) {
   if (wep.mode !== 'HOLSTERED_OPEN') return false;
   const rType = wep.stats.spec.reloadType;
-  if (rType === 'break_2' || rType === 'cylinder') {
+  if (rType === 'break_2' || rType === 'break_1' || rType === 'cylinder') {
     return countWeaponChambers(wep, 'live') >= 1 && countWeaponChambers(wep, 'spent') === 0;
   }
   if (rType === 'mag_slide') {
     return wep.reloadStage === 'mag_in';
+  }
+  if (rType === 'tube_pump' || rType === 'lever_gate') {
+    return wep.ammo >= 1;
   }
   return false;
 }
 
 export function finishWeaponReload(wep) {
   if (!canFinishReload(wep)) return false;
-  if (wep.stats.spec.reloadType === 'mag_slide') {
+  const rType = wep.stats.spec.reloadType;
+  if (rType === 'mag_slide') {
     wep.ammo = wep.maxAmmo;
+    wep.reloadStage = 'ready';
+  } else if (rType === 'tube_pump' || rType === 'lever_gate') {
     wep.reloadStage = 'ready';
   } else {
     wep.ammo = countWeaponChambers(wep, 'live');
@@ -304,7 +362,7 @@ export function stepWeaponTimers(wep, dt) {
   const missing = wep.pouchSlots.indexOf(false);
   if (missing !== -1) {
     wep.pouchRefillTimer += dt;
-    if (wep.pouchRefillTimer >= 2.8) {
+    if (wep.pouchRefillTimer >= 2.6) {
       wep.pouchRefillTimer = 0;
       wep.pouchSlots[missing] = true;
     }
@@ -313,8 +371,10 @@ export function stepWeaponTimers(wep, dt) {
   }
 }
 
-// Shortened nitro throw: triggers at 82% of a compact 36px pull!
 export function updateNitroDrag(nitro, normalizedPull) {
+  if (!nitro.installed || nitro.maxStacks <= 0) {
+    return { triggered: false, lowPsi: false, uninstalled: true };
+  }
   if (!nitro.dragging || nitro.latchedThisDrag) return { triggered: false, lowPsi: false };
   nitro.handlePos = Math.max(0, Math.min(1, normalizedPull));
   if (nitro.handlePos >= 0.82) {
@@ -331,12 +391,20 @@ export function updateNitroDrag(nitro, normalizedPull) {
     nitro.stackTimer = NITRO_STACK_DURATION + nitro.durationBonus;
     nitro.latchedThisDrag = true;
     nitro.dragging = false;
-    return { triggered: true, stacks: nitro.stacks, lowPsi: false };
+    const stage = getNitroStageInfo(nitro.stacks);
+    return {
+      triggered: true,
+      stacks: nitro.stacks,
+      stageName: stage.name,
+      stageColor: stage.color,
+      lowPsi: false,
+    };
   }
   return { triggered: false, lowPsi: false };
 }
 
 export function stepNitro(nitro, dt) {
+  if (!nitro.installed || nitro.maxStacks <= 0) return;
   if (!nitro.dragging) {
     nitro.handlePos = Math.max(0, nitro.handlePos - dt * 7.5);
     nitro.latchedThisDrag = false;
@@ -356,11 +424,33 @@ export function stepNitro(nitro, dt) {
   }
 }
 
-export function shiftGear(car, newGear) {
-  if (newGear < -1 || newGear > 6) return false;
+export function shiftGear(car, newGear, maxGears = car.maxGears || 5) {
+  if (newGear < -1 || newGear > maxGears) return false;
   if (car.gear === newGear) return false;
   car.gear = newGear;
   return true;
+}
+
+export function triggerHydroJump(car) {
+  if (car.jumpY > 0.05 || car.jumpCooldown > 0) return false;
+  car.jumpVel = 8.4;
+  car.jumpCooldown = 2.6;
+  return true;
+}
+
+export function triggerBackfire(car) {
+  if (car.backfireCooldown > 0) return false;
+  car.backfireCooldown = 4.2;
+  car.backfireFlash = 1.0;
+  return true;
+}
+
+export function deployTrunkHazard(car, carStats) {
+  if (!carStats || carStats.trunkType === 'none') return { deployed: false, reason: 'empty' };
+  if (car.trunkCooldown > 0) return { deployed: false, reason: 'cooling' };
+  car.trunkCooldown = carStats.trunkCooldownSec;
+  car.trunkMaxCooldown = carStats.trunkCooldownSec;
+  return { deployed: true, type: carStats.trunkType };
 }
 
 export function stepCarPhysics(
@@ -372,74 +462,113 @@ export function stepCarPhysics(
   raceTime,
   dt,
   isOpenWorld = false,
-  totalLaps = 3
+  totalLaps = 3,
+  godMode = false
 ) {
-  // Supercharger Blower gimmick heat management (V8 Muscle)
-  if (car.blowerActive) {
-    car.blowerHeat = Math.min(1, car.blowerHeat + dt * 0.14);
-    if (car.blowerHeat >= 1) {
-      car.blowerActive = false; // Auto cut-off to cool down
+  car.maxGears = carStats.maxGears;
+  if (car.gear > car.maxGears) car.gear = car.maxGears;
+
+  // Cooldowns & Hydro-Jump vertical arc
+  car.jumpCooldown = Math.max(0, car.jumpCooldown - dt);
+  car.backfireCooldown = Math.max(0, car.backfireCooldown - dt);
+  car.backfireFlash = Math.max(0, car.backfireFlash - dt * 2.8);
+  car.trunkCooldown = Math.max(0, car.trunkCooldown - dt);
+
+  if (car.jumpY > 0 || car.jumpVel > 0) {
+    car.jumpY += car.jumpVel * dt;
+    car.jumpVel -= 19.5 * dt;
+    if (car.jumpY <= 0) {
+      car.jumpY = 0;
+      car.jumpVel = 0;
+    }
+  }
+
+  // Heat-managed gimmicks (Rustbucket Choke & V8 Interceptor Blower)
+  const heatActive = car.blowerActive || car.chokeActive;
+  if (heatActive) {
+    car.gimmickHeat = Math.min(1, car.gimmickHeat + dt * 0.16 * carStats.heatRateMult);
+    if (car.gimmickHeat >= 1) {
+      car.blowerActive = false;
+      car.chokeActive = false;
     }
   } else {
-    car.blowerHeat = Math.max(0, car.blowerHeat - dt * 0.22);
+    car.gimmickHeat = Math.max(0, car.gimmickHeat - dt * (0.24 / carStats.heatRateMult));
   }
-  const blowerBoost = car.blowerActive ? 1.2 : 1.0;
+
+  const blowerTorque = car.blowerActive ? 1.22 : 1.0;
+  const chokeTorque = car.chokeActive ? (car.gear <= 2 ? 1.32 : 1.14) : 1.0;
+  const vcamTorque = car.vcamActive && car.rpm > 0.6 ? 1.18 : 1.0;
+  const aeroTopMult =
+    carStats.spec.gimmickType === 'active_aero'
+      ? car.aeroSlipMode
+        ? 1.12
+        : 0.98
+      : 1.0;
+  const aeroGripMult =
+    carStats.spec.gimmickType === 'active_aero'
+      ? car.aeroSlipMode
+        ? 0.9
+        : 1.35
+      : 1.0;
 
   const nitroBonusMps = nitro.stacks * 7.8;
-  const topCarMps = carStats.topMps * (car.blowerActive ? 1.07 : 1.0);
+  const topCarMps =
+    carStats.topMps *
+    aeroTopMult *
+    (car.blowerActive ? 1.07 : 1.0) *
+    (car.vcamActive ? 1.05 : 1.0);
 
-  // Auto-accelerate based on H-pattern gear!
   if (car.gear === -1) {
-    // Reverse slot ('R'): brakes forward motion hard, then reverses up to -11 m/s
     if (car.speed > 0.5) {
       car.speed = Math.max(0, car.speed - 28.0 * dt);
     } else {
-      car.speed = Math.max(-11.0, car.speed - 11.5 * dt);
+      car.speed = Math.max(-11.5, car.speed - 11.5 * dt);
     }
-    car.rpm = 0.28 + Math.min(0.65, Math.abs(car.speed) / 11);
+    car.rpm = 0.28 + Math.min(0.65, Math.abs(car.speed) / 11.5);
     car.shiftLight = false;
   } else if (car.gear === 0) {
-    // Neutral ('N'): pure coast
     const drag = 2.4 + Math.abs(car.speed) * 0.03;
     if (car.speed > 0) car.speed = Math.max(0, car.speed - drag * dt);
     else if (car.speed < 0) car.speed = Math.min(0, car.speed + 8.0 * dt);
     car.rpm = Math.max(0.18, car.rpm - dt * 1.5);
     car.shiftLight = false;
   } else {
-    // Forward gears 1..6
-    const gearMinSpeed = topCarMps * GEAR_MIN_FRAC[car.gear];
-    const gearMaxSpeed = topCarMps * GEAR_MAX_FRAC[car.gear] + nitroBonusMps;
+    const { minFrac, maxFrac } = getGearBand(car.gear, car.maxGears);
+    const gearMinSpeed = topCarMps * minFrac;
+    const gearMaxSpeed = topCarMps * maxFrac + nitroBonusMps;
 
     if (car.speed < 0) {
       car.speed = Math.min(0, car.speed + 22.0 * dt);
     } else if (car.speed > gearMaxSpeed + 0.8) {
-      // Downshift engine-braking! Pulling from 5th/6th down to 2nd/3rd slows cleanly for corners
       const overSpeed = car.speed - gearMaxSpeed;
-      const engineBrake = 16.5 + Math.min(18.0, overSpeed * 0.9);
+      const engineBrake = 16.5 + Math.min(19.0, overSpeed * 0.9);
       car.speed = Math.max(gearMaxSpeed, car.speed - engineBrake * dt);
     } else {
-      // Auto-throttle climbs smoothly toward current gear ceiling
-      // Shifting way too high at crawl speed lugs slightly (50% torque) while proper gear pulls 100%
       const lugFactor =
-        car.speed < gearMinSpeed * 0.78 ? 0.52 : car.speed < gearMinSpeed ? 0.8 : 1.0;
-      const gearTorqueScale = 1.18 - (car.gear - 1) * 0.07; // Lower gears pull harder
+        car.speed < gearMinSpeed * 0.78 ? 0.52 : car.speed < gearMinSpeed ? 0.82 : 1.0;
+      const gearTorqueScale = 1.2 - ((car.gear - 1) / Math.max(1, car.maxGears - 1)) * 0.34;
       const pull =
-        (carStats.accel * gearTorqueScale * lugFactor * blowerBoost + nitro.stacks * 10.5) * 0.72;
+        (carStats.accel *
+          gearTorqueScale *
+          lugFactor *
+          blowerTorque *
+          chokeTorque *
+          vcamTorque +
+          nitro.stacks * 10.5) *
+        0.74;
       car.speed = Math.min(gearMaxSpeed, car.speed + pull * dt);
     }
 
-    // Drift handbrake slightly trims speed to rotate nose into hairpins
     if (car.driftHeld && car.speed > 14) {
-      car.speed = Math.max(14, car.speed - 9.5 * dt);
+      car.speed = Math.max(14, car.speed - 9.2 * dt);
     }
 
-    const bandSpan = Math.max(8, topCarMps * GEAR_MAX_FRAC[car.gear] - gearMinSpeed * 0.7);
+    const bandSpan = Math.max(7, topCarMps * maxFrac - gearMinSpeed * 0.7);
     const rawRpm = 0.22 + ((car.speed - gearMinSpeed * 0.7) / bandSpan) * 0.76;
     car.rpm = Math.max(0.18, Math.min(0.99, rawRpm));
-    car.shiftLight = car.gear < 6 && car.rpm >= 0.9;
+    car.shiftLight = car.gear < car.maxGears && car.rpm >= 0.89;
   }
 
-  // Wheel self-centering + road wander when hand is off the wheel
   car.bumpPhase += dt * (2.2 + Math.abs(car.speed) * 0.22);
   if (!car.wheelHeld) {
     const centerStep = 0.82 * dt;
@@ -449,7 +578,7 @@ export function stepCarPhysics(
       car.wheelAngle -= Math.sign(car.wheelAngle) * centerStep;
     }
     const speedFactor = Math.min(1, Math.abs(car.speed) / 32);
-    const nitroWobble = 1 + nitro.stacks * 0.7;
+    const nitroWobble = 1 + nitro.stacks * 0.65;
     const roadWander =
       (Math.sin(car.bumpPhase * 0.9) * 0.14 + Math.cos(car.bumpPhase * 2.1) * 0.08) *
       speedFactor *
@@ -462,10 +591,10 @@ export function stepCarPhysics(
 
   const steerNorm = car.wheelAngle / MAX_WHEEL_RAD;
   const lowSpeedRamp = Math.min(1, Math.abs(car.speed) / 7.5) * (car.speed >= 0 ? 1 : -1);
-  const highSpeedDamp = 1 / (1 + Math.max(0, Math.abs(car.speed) - 28) * 0.016);
+  const highSpeedDamp = 1 / (1 + Math.max(0, Math.abs(car.speed) - 30) * 0.015);
   const driftTurnMult = car.driftHeld ? 1.52 : 1.0;
   const steerRate =
-    steerNorm * carStats.handling * lowSpeedRamp * highSpeedDamp * driftTurnMult;
+    steerNorm * carStats.handling * aeroGripMult * lowSpeedRamp * highSpeedDamp * driftTurnMult;
 
   const forwardSpeed = car.speed * Math.cos(car.headingOffset);
   const lateralSpeed = car.speed * Math.sin(car.headingOffset);
@@ -482,11 +611,10 @@ export function stepCarPhysics(
   car.wallHitCooldown = Math.max(0, car.wallHitCooldown - dt);
 
   if (isOpenWorld) {
-    // Level 2 Badlands Flats: wide compacted trail +-26m, open sand flats out to +-88m!
-    car.onCurb = absLat >= 24.5 && absLat <= 28.0;
-    car.offRoad = absLat > 28.0;
-    if (car.offRoad && car.speed > 34 && nitro.stacks === 0) {
-      car.speed = Math.max(34, car.speed - 7.5 * dt);
+    car.onCurb = car.jumpY < 0.1 && absLat >= 24.5 && absLat <= 28.0;
+    car.offRoad = car.jumpY < 0.1 && absLat > 28.0;
+    if (car.offRoad && car.speed > 34 && nitro.stacks === 0 && carStats.offRoadPenaltyMult > 0) {
+      car.speed = Math.max(34, car.speed - 8.0 * carStats.offRoadPenaltyMult * dt);
     }
     const canyonWallLimit = 88.0;
     if (absLat > canyonWallLimit) {
@@ -496,15 +624,14 @@ export function stepCarPhysics(
       if (car.wallHitCooldown <= 0 && Math.abs(car.speed) > 14) {
         hitWall = true;
         car.wallHitCooldown = 0.5;
-        car.speed *= 0.75;
+        car.speed *= 0.78;
       }
     }
   } else {
-    // Level 1 Canyon Circuit: widened 21m asphalt road (+-10.5m), curbs 10.5..12.0m, rails at +-14.2m
-    car.onCurb = absLat >= 10.2 && absLat <= 12.1;
-    car.offRoad = absLat > 12.1;
-    if (car.offRoad && car.speed > 22) {
-      car.speed = Math.max(22, car.speed - 12.0 * dt);
+    car.onCurb = car.jumpY < 0.1 && absLat >= 10.2 && absLat <= 12.1;
+    car.offRoad = car.jumpY < 0.1 && absLat > 12.1;
+    if (car.offRoad && car.speed > 22 && carStats.offRoadPenaltyMult > 0) {
+      car.speed = Math.max(22, car.speed - 12.5 * carStats.offRoadPenaltyMult * dt);
     }
     const wallLimit = 14.0;
     if (absLat > wallLimit) {
@@ -516,12 +643,17 @@ export function stepCarPhysics(
       if (car.wallHitCooldown <= 0 && Math.abs(car.speed) > 12) {
         hitWall = true;
         car.wallHitCooldown = 0.45;
-        car.speed *= 0.78;
-        car.armor = Math.max(0, car.armor - 4);
+        car.speed *= 0.8;
+        if (!godMode) {
+          const bumperSave = carStats.parts.bumper >= 1 ? 2 : 4;
+          car.armor = Math.max(0, car.armor - bumperSave);
+        }
         if (nitro.stacks >= 2) nitro.stacks -= 1;
       }
     }
   }
+
+  if (godMode) car.armor = car.maxArmor;
 
   const prevS = car.s;
   car.s = (((car.s + ds) % 1) + 1) % 1;
@@ -551,7 +683,7 @@ export function stepCarPhysics(
     }
   }
 
-  return { hitWall, lapCompleted, playerWrecked: car.armor <= 0 };
+  return { hitWall, lapCompleted, playerWrecked: !godMode && car.armor <= 0 };
 }
 
 export function formatRaceTime(seconds) {

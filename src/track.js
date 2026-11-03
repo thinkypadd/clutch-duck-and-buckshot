@@ -1,53 +1,6 @@
 import * as THREE from 'three';
 import { createPsxMaterial } from './psx.js';
 
-export function buildShowroomStage(scene, textures) {
-  const group = new THREE.Group();
-
-  const floorMat = createPsxMaterial({ map: textures.showroomFloor, affine: 0.5 });
-  const floorGeo = new THREE.PlaneGeometry(46, 46, 8, 8);
-  floorGeo.rotateX(-Math.PI / 2);
-  for (let i = 0; i < floorGeo.attributes.uv.count; i++) {
-    floorGeo.attributes.uv.setXY(
-      i,
-      floorGeo.attributes.uv.getX(i) * 8,
-      floorGeo.attributes.uv.getY(i) * 8
-    );
-  }
-  const floor = new THREE.Mesh(floorGeo, floorMat);
-  group.add(floor);
-
-  // Turntable plinth
-  const plinthMat = createPsxMaterial({ color: 0x262b36 });
-  const rimMat = createPsxMaterial({ color: 0xffb020, emissive: 0x664008 });
-  const plinth = new THREE.Mesh(new THREE.CylinderGeometry(3.55, 3.75, 0.22, 16), plinthMat);
-  plinth.position.y = 0.11;
-  const plinthRim = new THREE.Mesh(new THREE.CylinderGeometry(3.78, 3.78, 0.08, 16), rimMat);
-  plinthRim.position.y = 0.05;
-  group.add(plinth, plinthRim);
-
-  // Garage background pillars & light bars
-  const pillarMat = createPsxMaterial({ color: 0x333947 });
-  const lampMat = createPsxMaterial({ color: 0xfff2cc, emissive: 0x8f7a4a });
-  for (let i = -2; i <= 2; i++) {
-    const p = new THREE.Mesh(new THREE.BoxGeometry(0.7, 7.0, 0.7), pillarMat);
-    p.position.set(i * 4.8, 3.5, -8.5);
-    group.add(p);
-  }
-  const beam = new THREE.Mesh(new THREE.BoxGeometry(22, 0.5, 0.8), pillarMat);
-  beam.position.set(0, 6.2, -8.5);
-  const lightStrip = new THREE.Mesh(new THREE.BoxGeometry(8.5, 0.18, 0.4), lampMat);
-  lightStrip.position.set(0, 4.9, -1.2);
-  group.add(beam, lightStrip);
-
-  const turntable = new THREE.Group();
-  turntable.position.y = 0.22;
-  group.add(turntable);
-
-  scene.add(group);
-  return { group, turntable };
-}
-
 export function buildCircuit(scene, textures, trackId = 'canyon') {
   const group = new THREE.Group();
   const isOpenWorld = trackId === 'badlands';
